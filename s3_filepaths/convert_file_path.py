@@ -42,8 +42,8 @@ def unix2dts(unixnumber, timezone='eastern'):
     return date_time_str, date_time_obj
 
 
-coastcam_bucket = "s3://cmgp-coastcam/cameras/"
-source_filepath = "s3://cmgp-coastcam/cameras/caco-01/products/1576260000.c2.snap.jpg" #old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename] 
+coastcam_bucket = "s3://test-cmgp-bucket/cameras/"
+source_filepath = "s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg" #old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename] 
 
 old_path = source_filepath.replace(coastcam_bucket, '') #removes the coastcam start of filepath from the source url so we can extract necesary info to create new url
 old_path_elements = old_path.split("/") #splits up elements between forward slashes in the old filepath into a list
