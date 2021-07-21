@@ -9,13 +9,13 @@
 #write first for converting one file, then write later to loop through for given s3 folder
 #save object data
 import numpy as np
-import datetime
 import os
-import fsspec
-#will need fs3 package to use s3 in fsspec
+import time
+import fsspec #will need fs3 package to use s3 in fsspec
 import numpy as np
 import imageio
 import calendar
+import datetime
 from dateutil import tz
 
 
@@ -29,18 +29,18 @@ def unix2dts(unixnumber, timezone='eastern'):
         date_time_string, date_time_object in utc
     TODO: not sure why this returns the correct value without specifying that input time zone is eastern
     """
-    if timezone.lower() == 'eastern':
-        tzone = tz.gettz('America/New_York')
-    elif timezone.lower() == 'utc':
-        tzone = tz.gettz('UTC')
+##    if timezone.lower() == 'eastern':
+##        tzone = tz.gettz('America/New_York')
+##    elif timezone.lower() == 'utc':
+##        tzone = tz.gettz('UTC')
 
     # images other than "snaps" end in 1, 2,...but these are not part of the time stamp.
     # replace with zero
     ts = int( unixnumber[:-1]+'0')
-    date_time_obj =  datetime.datetime.utcfromtimestamp(ts)
+    date_time_obj =  datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
     date_time_str = date_time_obj.strftime('%Y-%m-%d %H:%M:%S')
+    #print("object timestamp: " + str(date_time_obj))
     return date_time_str, date_time_obj
-
 
 coastcam_bucket = "s3://test-cmgp-bucket/cameras/"
 source_filepath = "s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg" #old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename] 
@@ -83,18 +83,12 @@ new_format_day = day_of_year + "_" + month_formatted + "." + day
 
 new_filepath = coastcam_bucket + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
 new_path_filename = new_filepath + filename
-print(new_path_filename)
+print("new filepath: " + new_path_filename)
 
+#Use fsspec to copy image from old path to new path
 fs = fsspec.filesystem('s3', profile='coastcam')
+fs.copy(source_filepath, new_path_filename)
 
-#read image from old filepath
-with fs.open(source_filepath) as f_read:
-    im = imageio.imread(f_read)
-
-#write to new file path
-with fs.open(new_path_filename, 'wb') as f_write:
-    imageio.imwrite(f_write,im,format='jpg')
-
-#####destination for test is s3:/cmgp-coastcam/cameras/caco-01/c2/2019/347_Dec.13/raw/1576260000.c2.snap.jpg#####
+#####destination for test is s3://test-cmgp-bucket/cameras/caco-01/c2/2019/347_Dec.13/raw/1576260000.c2.snap.jpg#####
 
 
