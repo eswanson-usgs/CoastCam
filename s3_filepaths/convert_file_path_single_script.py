@@ -1,13 +1,23 @@
-#retrieve filepath info from old AWS S3 filepath and filename.
-#use this info to create new filepath in s3
-#what we need for new filepath: station, camera, year, day, filename
-#get station, filename from old filepath name
-#get year,day, camera from filename.
-#will need to create day in new filepath in format ddd_mmm.nn. ddd is 3-digit number describing day in the year. mmm is 3 letter abbreviation of month. nn is 2 digit number of day of month.
-#might have to account for leap days?
-#filenames are in the format [unix datetime].[camera in format c#].[file format].jpg
-#write first for converting one file, then write later to loop through for given s3 folder
-#save object data
+"""
+Eric Swanson
+The purpose of this script is to convert the S3 filepath for one image in the
+USGS CoastCam bucket. This usees a test S3 bucket and not the public-facing cmgp-CoastCam bucket.
+The old filepath is in the format s3:/cmgp-coastcam/cameras/[station]/products/[long filename].
+The new filepath is in the format s3:/cmgp-coastcam/cameras/[station]/[camera]/[year]/[day]/raw/[longfilename].
+day is the format ddd_mmm.nn. ddd is 3-digit number describing day in the year.
+mmm is 3 letter abbreviation of month. nn is 2 digit number of day of month.
+filenames are in the format [unix datetime].[camera in format c#].[file format].jpg
+This script splits up the filepath of the old path to be used in the new path. The elements used in the
+new path are the [station] and [long filename]. Then it plits up the filename to get elements used in the new path.
+[unix datetime] is used to get [year], [day], and [camera]. unix2datetime() converts the unix time in the filename
+to a human-readable datetime object and string. Once the new filepath is created, the S3 buckets are accessed using
+fsspec and the image is copied from one path to another use the fsspec copy() method.
+For this test script, the source filepath is
+s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg
+The destination filepath is
+s3://test-cmgp-bucket/cameras/caco-01/c2/2019/347_Dec.13/raw/1576260000.c2.snap.jpg
+The filename is 1576260000.c2.snap.jpg
+"""
 import numpy as np
 import os
 import time
@@ -17,8 +27,9 @@ import imageio
 import calendar
 import datetime
 from dateutil import tz
-from freezegun import freeze_time
 
+
+###### FUNCTIONS ######
 def unix2datetime(unixnumber):
     """
    Developed from unix2dts by Chris Sherwood. Updates by Eric Swanson.
@@ -39,6 +50,7 @@ def unix2datetime(unixnumber):
     print("object timestamp: " + str(date_time_obj))
     return date_time_str, date_time_obj
 
+###### MAIN ######
 coastcam_bucket = "s3://test-cmgp-bucket/cameras/"
 source_filepath = "s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg" #old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename] 
 
@@ -49,7 +61,7 @@ old_path_elements = old_path.split("/") #splits up elements between forward slas
 #list will have 3 elements: "[station]", "products", "[image filename]"
 for elements in old_path_elements:
 	if len(elements) == 0: #if string element is ''
-		old_path_elements.remove(element)
+		old_path_elements.remove(elements)
 
 station = old_path_elements[0]
 filename = old_path_elements[2]
