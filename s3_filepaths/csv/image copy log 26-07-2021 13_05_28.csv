@@ -1,0 +1,7 @@
+source filepath,destination filepath
+s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg,s3://test-cmgp-bucket/cameras/caco-01/c2/2019/347_Dec.13/raw/1576260000.c2.snap.jpg
+s3://test-cmgp-bucket/cameras/caco-01/products/1576265401.c1.timex.jpg,s3://test-cmgp-bucket/cameras/caco-01/c1/2019/347_Dec.13/raw/1576265401.c1.timex.jpg
+s3://test-cmgp-bucket/cameras/caco-01/products/1576267202.c1.var.jpg,s3://test-cmgp-bucket/cameras/caco-01/c1/2019/347_Dec.13/raw/1576267202.c1.var.jpg
+s3://test-cmgp-bucket/cameras/caco-01/products/1576269003.c2.bright.jpg,s3://test-cmgp-bucket/cameras/caco-01/c2/2019/347_Dec.13/raw/1576269003.c2.bright.jpg
+s3://test-cmgp-bucket/cameras/caco-01/products/1576270804.c1.dark.jpg,s3://test-cmgp-bucket/cameras/caco-01/c1/2019/347_Dec.13/raw/1576270804.c1.dark.jpg
+s3://test-cmgp-bucket/cameras/caco-01/products/1576272605.c2.rundark.jpg,s3://test-cmgp-bucket/cameras/caco-01/c2/2019/347_Dec.13/raw/1576272605.c2.rundark.jpg
