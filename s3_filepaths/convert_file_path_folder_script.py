@@ -137,12 +137,14 @@ def write2csv(csv_list, csv_path):
 
 
 ##### MAIN #####
+print("start:", datetime.datetime.now())
 #source folder filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
-source_folder = "s3://test-cmgp-bucket/cameras/caco-01/products/"  
+source_folder = "s3://cmgp-coastcam/cameras/caco-01/products/"  
 
 #access list of images in source folder using fsspec
+#station caco-01 for testing
 fs = fsspec.filesystem('s3', profile='coastcam')
-image_list = fs.glob(source_folder+'/*') #caco-01 for testing
+image_list = fs.glob(source_folder+'/*') 
 
 #list of common image types
 common_image_list = ['.tif', '.tiff', '.bmp', 'jpg', '.jpeg', '.gif', '.png', '.eps', 'raw', 'cr2', '.nef', '.orf', '.sr2']
@@ -180,6 +182,7 @@ now = datetime.datetime.now()
 now_string = now.strftime("%d-%m-%Y %H_%M_%S")
 csv_name = 'image copy log ' + now_string + '.csv'
 write2csv(csv_list, csv_path)
+print("end:", datetime.datetime.now())
 
 
 
