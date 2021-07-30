@@ -1,7 +1,9 @@
-#Eric Swanson
-#Purpose: for a day where images are captured, give metrics of how many of each image type
-#are captued. Ideally should have one of each image type every half hour. Use the day folders
-#in the s3 imagery bucket. Create bar chart for each image type for given day.
+"""
+Eric Swanson
+Purpose: for a day where images are captured, give metrics of how many of each image type
+are captued. Image types are snap, timex, var, bright, dark, rundark.
+Use the day folders in the S3 imagery bucket. Create a bar chart for each image type for given day.
+"""
 
 #####REQUIRED PACKAGES#####
 import os
@@ -22,13 +24,12 @@ source_folder = "s3://test-cmgp-bucket/cameras/caco-01/c1/2019/347_Dec.13/raw"
 
 #get day
 path_elements = source_folder.split("/")
-day_formatted = path_elements[5]
+#elements in list ['s3:', '', [bucket], 'cameras', [station], [camera], [year], [day], 'raw'
+day_formatted = path_elements[7]
 day_elements = day_formatted.split("_")
 day = day_elements[1]
 
-
-#access list of images
-in source folder using fsspec
+#access list of images in source folder using fsspec
 #station caco-01 for testing
 fs = fsspec.filesystem('s3', profile='coastcam')
 image_list = fs.glob(source_folder+'/*')
@@ -61,22 +62,22 @@ for image in image_list:
     #this is an image
     else:
         #if snap
-        if re.match(".snap*", image):
+        if re.match(".+snap*", image):
             snap_count += 1
         #if timex
-        if re.match(".timex*", image):
+        if re.match(".+timex*", image):
             timex_count += 1
         #if var
-        if re.match(".var*", image):
+        if re.match(".+var*", image):
             var_count += 1
         #if bright
-        if re.match(".bright*", image):
+        if re.match(".+bright*", image):
             bright_count += 1
-        #if dark
-        if re.match(".dark*", image):
+        #if dark. Will also increment for instances of "rundark" unless explicitly stated otherwise
+        if re.match(".+dark*", image) and not re.match(".+rundark*", image):
             dark_count += 1
         #if rundark
-        if re.match(".rundark*", image):
+        if re.match(".+rundark*", image):
             rundark_count += 1
 
 
@@ -90,7 +91,7 @@ height = [snap_count, timex_count, var_count, bright_count, dark_count, rundark_
 tick_label = ['snap', 'timex', 'var', 'bright', 'dark', 'rundark']
 
 #plotting bar chart
-plt.bar(x, height, tick_label = tick_label, width = 0.8, color = ['red'])
+plt.bar(x, height, tick_label = tick_label, width = 0.8, color = ['green'])
 
 #naming x-axis
 plt.xlabel('image types')
