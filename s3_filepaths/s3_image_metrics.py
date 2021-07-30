@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 #source day folder in format s3://cmgp-coastcam/cameras/[station]/[camera]/[year]/[day]/raw
 #will search all camera folders (c1, c2, etc.)
-source_folder = "s3://test-cmgp-bucket/cameras/caco-01/c1/2019/347_Dec.13/raw"
+source_folder = "s3://cmgp-coastcam/cameras/caco-01/c1/2019/348_Dec.14/raw"
 
 #get day
 path_elements = source_folder.split("/")
@@ -92,6 +92,9 @@ tick_label = ['snap', 'timex', 'var', 'bright', 'dark', 'rundark']
 
 #plotting bar chart
 plt.bar(x, height, tick_label = tick_label, width = 0.8, color = ['green'])
+
+#set y-ticks even spaced from min height to max height of bars
+plt.yticks(np.arange(min(height), max(height) + 1, 1))
 
 #naming x-axis
 plt.xlabel('image types')
