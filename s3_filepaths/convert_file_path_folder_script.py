@@ -57,9 +57,9 @@ def copy_s3_image(source_filepath):
     filenames are in the format [unix datetime].[camera in format c#].[file format].[image format]
     New filepath is created and returned as a string by this function.
     Input:
-        source_filepath - current filepath of image where the image will be copied from.
+        source_filepath - (string) current filepath of image where the image will be copied from.
     Output:
-        dest_filepath - new filepath image is copied to.
+        dest_filepath - (string) new filepath image is copied to.
     """
 
     old_path_elements = source_filepath.split("/")
