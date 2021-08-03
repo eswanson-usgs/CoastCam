@@ -156,6 +156,9 @@ common_image_list = ['.tif', '.tiff', '.bmp', 'jpg', '.jpeg', '.gif', '.png', '.
 csv_path = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/s3_filepaths/csv/"
 csv_list = []
 
+#unix time of where the script previously left off. Copy images with time greater than this
+pickup_time = 1603823405
+
 #loop through folder of images
 #check if image is of proper file types
 #if so, copy images
@@ -196,7 +199,7 @@ for image in image_list:
         image_type = filename_elements[2]
         image_file_type = filename_elements[3]
 
-        if int(image_unix_time) > 1603823405:
+        if int(image_unix_time) > pickup_time:
             
         #################################################
         ######
