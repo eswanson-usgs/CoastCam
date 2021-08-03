@@ -14,6 +14,9 @@ to a human-readable datetime object and string. Once the new filepath is created
 fsspec and the image is copied from one path to another use the fsspec copy() method. This is done using the function
 copy_s3_image(). Only common image type files will be copied.
 write2csv() is used to write the source and destination filepath to a csv file.
+The "hardwire" version of this script is designed to pickup whre the script left off when internet connection
+is lost during the copying process. The unix number of the last image image that was copied is used in a conditional
+and all images with unix number greater than this are copied.
 """
 ##### REQUIERD PACKAGES #####
 import numpy as np
@@ -171,11 +174,37 @@ for image in image_list:
     else:
         #get source and destination filepaths
         #copy images
-        source_filepath = "s3://" + image
-        dest_filepath = copy_s3_image(source_filepath)
 
-        csv_entry = [source_filepath, dest_filepath]
-        csv_list.append(csv_entry)
+        #######FOR PICKING UP WHERE LIST LEFT OFF######
+        old_path_elements = image.split("/")
+
+        #remove empty space elements from the list
+        #list will have 5 elements: "[bucket]", "cameras", "[station]", "products", "[image filename]"
+        for elements in old_path_elements:
+            #if string element is ''
+            if len(elements) == 0: 
+                old_path_elements.remove(elements)
+
+        bucket = old_path_elements[1]
+        station = old_path_elements[3]
+        filename = old_path_elements[4]
+
+        #splits up elements of filename into a list
+        filename_elements = filename.split(".") 
+        image_unix_time = filename_elements[0]
+        image_camera = filename_elements[1] 
+        image_type = filename_elements[2]
+        image_file_type = filename_elements[3]
+
+        if int(image_unix_time) > 1603823405:
+            
+        #################################################
+        ######
+            source_filepath = "s3://" + image
+            dest_filepath = copy_s3_image(source_filepath)
+
+            csv_entry = [source_filepath, dest_filepath]
+            csv_list.append(csv_entry)
 
 #create csv file
 now = datetime.datetime.now()
