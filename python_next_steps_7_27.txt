@@ -1,0 +1,3 @@
+-metrics for day
+-how many of each type of image for folder? 1 of each kinda every half hour
+-given timezone, lat, long, determine sunrise/sunset
