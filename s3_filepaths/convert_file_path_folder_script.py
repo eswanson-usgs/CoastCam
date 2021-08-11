@@ -76,38 +76,42 @@ def copy_s3_image(source_filepath):
     filename = old_path_elements[5]
 
     #splits up elements of filename into a list
-    filename_elements = filename.split(".") 
-    image_unix_time = filename_elements[0]
-    image_camera = filename_elements[1] 
-    image_type = filename_elements[2]
-    image_file_type = filename_elements[3]
+    filename_elements = filename.split(".")
+    #check to see if filename is properly formatted
+    if len(filename_elements) != 4:
+        return 'Not properly formatted. Not copied.'
+    else:
+        image_unix_time = filename_elements[0]
+        image_camera = filename_elements[1] 
+        image_type = filename_elements[2]
+        image_file_type = filename_elements[3]
 
-    #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
-    image_date_time, date_time_obj = unix2datetime(image_unix_time) 
-    year = image_date_time[0:4]
-    month = image_date_time[5:7]
-    day = image_date_time[8:10]
-    
-    #day format for new filepath will have to be in format ddd_mmm.nn
-    #use built-in python function to convert from known variables to new date
-    #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
-    day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
+        #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
+        image_date_time, date_time_obj = unix2datetime(image_unix_time) 
+        year = image_date_time[0:4]
+        month = image_date_time[5:7]
+        day = image_date_time[8:10]
+        
+        #day format for new filepath will have to be in format ddd_mmm.nn
+        #use built-in python function to convert from known variables to new date
+        #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
+        day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
 
-    #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
-    #get full month in word form
-    month_word = calendar.month_name[int(month)]
-    #month in the mmm word form
-    month_formatted = month_word[0:3] 
+        #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
+        #get full month in word form
+        month_word = calendar.month_name[int(month)]
+        #month in the mmm word form
+        month_formatted = month_word[0:3] 
 
-    new_format_day = day_of_year + "_" + month_formatted + "." + day
-    
-    new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
-    dest_filepath = new_filepath + filename
+        new_format_day = day_of_year + "_" + month_formatted + "." + day
+        
+        new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
+        dest_filepath = new_filepath + filename
 
-    #Use fsspec to copy image from old path to new path
-    fs = fsspec.filesystem('s3', profile='coastcam')
-    fs.copy(source_filepath, dest_filepath)
-    return dest_filepath
+        #Use fsspec to copy image from old path to new path
+        fs = fsspec.filesystem('s3', profile='coastcam')
+        fs.copy(source_filepath, dest_filepath)
+        return dest_filepath
 
 
 def write2csv(csv_list, csv_path):
@@ -139,7 +143,7 @@ def write2csv(csv_list, csv_path):
 ##### MAIN #####
 print("start:", datetime.datetime.now())
 #source folder filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
-source_folder = "s3://cmgp-coastcam/cameras/caco-01/products/"  
+source_folder = "s3://cmgp-coastcam/cameras/nuvuk/products/"  
 
 #access list of images in source folder using fsspec
 #station caco-01 for testing
