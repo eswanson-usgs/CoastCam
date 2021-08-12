@@ -1,0 +1,13 @@
+source filepath,destination filepath
+s3://cmgp-coastcam/cameras/capitola/products/c1_bright.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c1_dark.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c1_rundark.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c1_snap.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c1_timex.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c1_var.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c2_bright.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c2_dark.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c2_rundark.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c2_snap.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c2_timex.jpg,Not properly formatted. Not copied.
+s3://cmgp-coastcam/cameras/capitola/products/c2_var.jpg,Not properly formatted. Not copied.
