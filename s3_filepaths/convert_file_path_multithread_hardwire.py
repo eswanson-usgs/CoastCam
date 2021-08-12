@@ -12,9 +12,11 @@ new path are the [station] and [long filename]. Then it plits up the filename to
 [unix datetime] is used to get [year], [day], and [camera]. unix2datetime() converts the unix time in the filename
 to a human-readable datetime object and string. Once the new filepath is created, the S3 buckets are accessed using
 fsspec and the image is copied from one path to another use the fsspec copy() method. This is done using the function
-copy_s3_image(). Only common image type files will be copied. Images are copied using multithreading
+copy_s3_image_hardwire(). Only common image type files will be copied. Images are copied using multithreading
 in the concurrent.futures module.
 write2csv() is used to write the source and destination filepath to a csv file.
+"Hardwired" so that the user manually enter a unix time of when they would like to start copying images from in
+the copy_s3_image_hardwire() function.
 """
 ##### REQUIERD PACKAGES #####
 import os
@@ -67,7 +69,8 @@ def check_image(file):
     return good_ending
         
 
-def copy_s3_image(source_filepath):
+######NEED TO MANUALLY ENTER HARDWIRE TIME INTO THIS FUNCTION#####
+def copy_s3_image_hardwire(source_filepath):
     """
     Copy an image file from its old filepath in the S3 bucket with the format
     s3://[bucket]/cameras/[station]/products/[long filename]. to a new filepath with the format
@@ -75,12 +78,16 @@ def copy_s3_image(source_filepath):
     day is in the format day is the format ddd_mmm.nn. ddd is 3-digit number describing day in the year.
     mmm is 3 letter abbreviation of month. nn is 2 digit number of day of month.
     filenames are in the format [unix datetime].[camera in format c#].[file format].[image format]
-    New filepath is created and returned as a string by this function.
+    New filepath is created and returned as a string by this function. This function is "hardwired" so that
+    the user manually enter a unix time of when they would like to start copying images from.
     Input:
         source_filepath - (string) current filepath of image where the image will be copied from.
     Output:
         dest_filepath - (string) new filepath image is copied to.
     """
+
+    #Unix time where the script picks up from to copy images
+    PICKUP_TIME = 1612216800 
     
     good_ending = check_image(source_filepath)
 
@@ -105,38 +112,44 @@ def copy_s3_image(source_filepath):
         #check to see if filename is properly formatted
         if len(filename_elements) != 4:
             return 'Not properly formatted. Not copied.'
+
+        ##### FOR PICKING UP WHERE SCRIPT LAST LEFT OFF#####
         else:
             image_unix_time = filename_elements[0]
-            image_camera = filename_elements[1] 
-            image_type = filename_elements[2]
-            image_file_type = filename_elements[3]
+            if int(image_unix_time) < PICKUP_TIME:
+                return 'previously copied'
+        ####################################################
+            else:
+                image_camera = filename_elements[1] 
+                image_type = filename_elements[2]
+                image_file_type = filename_elements[3]
 
-            #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
-            image_date_time, date_time_obj = unix2datetime(image_unix_time) 
-            year = image_date_time[0:4]
-            month = image_date_time[5:7]
-            day = image_date_time[8:10]
-            
-            #day format for new filepath will have to be in format ddd_mmm.nn
-            #use built-in python function to convert from known variables to new date
-            #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
-            day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
+                #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
+                image_date_time, date_time_obj = unix2datetime(image_unix_time) 
+                year = image_date_time[0:4]
+                month = image_date_time[5:7]
+                day = image_date_time[8:10]
+                
+                #day format for new filepath will have to be in format ddd_mmm.nn
+                #use built-in python function to convert from known variables to new date
+                #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
+                day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
 
-            #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
-            #get full month in word form
-            month_word = calendar.month_name[int(month)]
-            #month in the mmm word form
-            month_formatted = month_word[0:3] 
+                #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
+                #get full month in word form
+                month_word = calendar.month_name[int(month)]
+                #month in the mmm word form
+                month_formatted = month_word[0:3] 
 
-            new_format_day = day_of_year + "_" + month_formatted + "." + day
-            
-            new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
-            dest_filepath = new_filepath + filename
+                new_format_day = day_of_year + "_" + month_formatted + "." + day
+                
+                new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
+                dest_filepath = new_filepath + filename
 
-            #Use fsspec to copy image from old path to new path
-            fs = fsspec.filesystem('s3', profile='coastcam')
-            fs.copy(source_filepath, dest_filepath)
-            return dest_filepath
+                #Use fsspec to copy image from old path to new path
+                fs = fsspec.filesystem('s3', profile='coastcam')
+                fs.copy(source_filepath, dest_filepath)
+                return dest_filepath
     #if not image, return blank string. Will be used to determine if file copy needs to be logged in csv
     else:
         return 'Not an image. Not copied.'
@@ -188,7 +201,7 @@ csv_list = []
 #ProcessPoolExecutor is used for multithreading (allows multiple instances of function to be run at once)
 #result contains filepaths that were copied (in order that they exist in image_list)
 with concurrent.futures.ThreadPoolExecutor() as executor:
-    results = executor.map(copy_s3_image, image_list)
+    results = executor.map(copy_s3_image_hardwire, image_list)
 
     #iterate over outputted destination filepaths. Need to iterate  i because results is a generator, not a list.
     #create csv entry pairs from source and destination filepaths. This includes non-image files.
