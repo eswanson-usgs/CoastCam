@@ -87,7 +87,7 @@ def copy_s3_image_hardwire(source_filepath):
     """
 
     #Unix time where the script picks up from to copy images
-    PICKUP_TIME = 1612216800 
+    PICKUP_TIME = 1628719200
     
     good_ending = check_image(source_filepath)
 
