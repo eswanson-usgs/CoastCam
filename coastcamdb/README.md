@@ -1,1 +1,1 @@
-Folder for code related to converting S3 filepath names
+Folder for code related to accessing and updating the coastcamdb on AWS
