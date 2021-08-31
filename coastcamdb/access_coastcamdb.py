@@ -36,7 +36,6 @@ def parseCSV(filepath):
                 
     return db_list   
 
-
 ##### MAIN #####
 #parse csv
 filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
@@ -49,7 +48,8 @@ user = params[3]
 password = params[4]
 
 conn = pymysql.connect(host=host, user=user, port=port, passwd=password, db=dbname)
+print(type(conn))
 
 #test
-result = pd.read_sql('select * from station', con=conn)
+result = pd.read_sql('select * from camera', con=conn)
 print(result)

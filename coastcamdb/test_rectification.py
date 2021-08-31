@@ -13,6 +13,7 @@ CACO01_C2_IOBest.json
 coastcam_funcs.py
 calibration_crs.py
 rectifier_crs.py
+####
 '''
 
 ##### REQUIRED PACKAGES ######
@@ -77,14 +78,15 @@ elif metadata['coordinate_system'].lower() == 'geo':
     print('Extrinsics are in world coordinates')
 else:
     print('Invalid value of coordinate_system: ',metadata['coordinate_system'])
-    
-print(extrinsics_list[0])
-print(extrinsics_list[0]['y']-local_origin['y'])
+ 
+
+# print(extrinsics_list[0])
+# print(extrinsics_list[0]['y']-local_origin['y'])
 
 calibration = CameraCalibration(metadata,intrinsics_list[0],extrinsics_list[0],local_origin)
-print(calibration.local_origin)
-print(calibration.world_extrinsics)
-print(calibration.local_extrinsics)
+# print(calibration.local_origin)
+# print(calibration.world_extrinsics)
+# print(calibration.local_extrinsics)
 
 xmin = 0.
 xmax = 500.
@@ -107,21 +109,31 @@ rectifier = Rectifier(
     rectifier_grid
 )
 
+
+
+print(extrinsics_list[0])
+print(intrinsics_list[0])
+print(local_origin)
+
+
 rectified_image = rectifier.rectify_images(metadata, impaths, intrinsics_list, extrinsics_list, local_origin, fs=fs)
+plt.imshow(rectified_image.astype(int))
+plt.show()
 
 # test rectifying a single image
 single_file = impaths[0]
-print(single_file)
+#print(single_file)
 single_intrinsic = intrinsics_list[0]
 single_extrinsic = extrinsics_list[0]
-print(type(intrinsics_list))
-print(type(single_intrinsic))
-print(single_extrinsic)
+# print(type(intrinsics_list))
+# print(type(single_intrinsic))
+# print(single_extrinsic)
 rectified_single_image = rectifier.rectify_images(metadata, [impaths[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=fs)
 plt.imshow(rectified_single_image.astype(int))
 plt.gca().invert_yaxis()
 plt.xlabel('Offshore (m)')
 plt.ylabel('Alongshore (m)')
+plt.show()
 
 # write a local file
 ofile = e+'.rectified.jpg'
@@ -142,8 +154,6 @@ plt.text(220,670,ftime,fontsize=8,color='gold')
 plt.title(e)
 fp = e+'.rectified.png'
 plt.savefig(fp,dpi=200)
-plt.show()
 
 # alongshore profile of RGB values at 
 plt.plot(rectified_image[:,60,:])
-plt.show()

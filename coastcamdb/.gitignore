@@ -1,0 +1,9 @@
+
+#txt
+*.txt
+
+#jpg
+*.jpg
+
+#pychache
+/__pychache__
