@@ -5,5 +5,8 @@
 #jpg
 *.jpg
 
+#png
+*.png
+
 #pychache
 /__pychache__

@@ -83,6 +83,7 @@ else:
 # print(extrinsics_list[0])
 # print(extrinsics_list[0]['y']-local_origin['y'])
 
+print("metadata", metadata)
 calibration = CameraCalibration(metadata,intrinsics_list[0],extrinsics_list[0],local_origin)
 # print(calibration.local_origin)
 # print(calibration.world_extrinsics)

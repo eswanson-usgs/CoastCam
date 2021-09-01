@@ -1,7 +1,14 @@
 '''
 Eric Swanson
-Access the coastcamdb on AWS. Grab data from the DB and rectify a pair of images.
-create dicts for extrinsics, instrinsics, and metadata
+Purpose: Access the coastcamdb on AWS. Grab data from the DB and rectify a pair of images.
+create dicts for extrinsics, instrinsics, and metadata. Rectify images using the code from
+Chris Sherwood. 
+Description:
+Use parseCSV() to parse a csv file containing the necessary parameters to access the coastcamdb on AWS.
+Connect to the DB using the mysql.connection.connector object. Access the DB and query how many cameras
+exist for a given station. For each camera, create a set of 4 dictionaries of the extrinsic parameters, 
+intrinsic parameters, metadata, and local grid info using the function DBtoDict(). Once these dictionaries
+are created, they are used in the rectification code to rectify a pair of images.
 
 required files:
 CACO01_C1_EOBest.json
@@ -148,19 +155,19 @@ conn = mysql.connector.connect(user=user, password=password, host=host,database=
 #make lists of cal dicts
 extrinsics_list = []
 intrinsics_list = []
+metadata_list = []
 
-#get dictionaries for extrinsics, intrinsics, metadata, and local grid
-#camera 1
-extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, "CACO-01", "C1")
-
-extrinsics_list.append(extrinsics)
-intrinsics_list.append(intrinsics)
-
-#camera 2
-extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, "CACO-01", "C1")
-
-extrinsics_list.append(extrinsics)
-intrinsics_list.append(intrinsics)
+#for each camera at a station, add extrinsics, intrinsics, metadata dicts to lists. Also get local grid info
+station = "CACO-01"
+cursor = conn.cursor(buffered=True)
+query = "SELECT camera_number FROM camera WHERE station_name="+"'"+station+"'"
+cursor.execute(query)
+for row in cursor:
+  cam_num = row[0]
+  extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num)
+  extrinsics_list.append(extrinsics)
+  intrinsics_list.append(intrinsics)
+  metadata_list.append(metadata)  
 
 # # List of files...three for each camera. Calibration parameters are in .json format
 # # These are the USGS image filename format
@@ -201,17 +208,17 @@ for f in image_files:
     # intrinsics_list.append( json2dict(f) )
 
 # check test for coordinate system
-if metadata['coordinate_system'].lower() == 'xyz':
+if metadata_list[0]['coordinate_system'].lower() == 'xyz':
     print('Extrinsics are local coordinates')
-elif metadata['coordinate_system'].lower() == 'geo':
+elif metadata_list[0]['coordinate_system'].lower() == 'geo':
     print('Extrinsics are in world coordinates')
 else:
-    print('Invalid value of coordinate_system: ',metadata['coordinate_system'])
+    print('Invalid value of coordinate_system: ',metadata_list[0]['coordinate_system'])
     
 # print(extrinsics_list[0])
 # print(extrinsics_list[0]['y']-local_origin['y'])
 
-calibration = CameraCalibration(metadata,intrinsics_list[0],extrinsics_list[0],local_origin)
+calibration = CameraCalibration(metadata_list[0],intrinsics_list[0],extrinsics_list[0],local_origin)
 # print(calibration.local_origin)
 # print(calibration.world_extrinsics)
 # print(calibration.local_extrinsics)
@@ -237,15 +244,11 @@ rectifier = Rectifier(
     rectifier_grid
 )
 
-
 print(extrinsics_list[0])
 print(intrinsics_list[0])
 print(local_origin)
 
-
-
-
-rectified_image = rectifier.rectify_images(metadata, impaths, intrinsics_list, extrinsics_list, local_origin, fs=fs)
+rectified_image = rectifier.rectify_images(metadata_list[0], impaths, intrinsics_list, extrinsics_list, local_origin, fs=fs)
 plt.imshow(rectified_image.astype(int))
 plt.show()
 
@@ -257,7 +260,7 @@ single_extrinsic = extrinsics_list[0]
 # print(type(intrinsics_list))
 # print(type(single_intrinsic))
 # print(single_extrinsic)
-rectified_single_image = rectifier.rectify_images(metadata, [impaths[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=fs)
+rectified_single_image = rectifier.rectify_images(metadata_list[0], [impaths[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=fs)
 plt.imshow(rectified_single_image.astype(int))
 plt.gca().invert_yaxis()
 plt.xlabel('Offshore (m)')
