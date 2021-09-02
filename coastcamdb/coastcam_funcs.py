@@ -5,6 +5,7 @@ from dateutil import tz
 from skimage import io
 from PIL import Image
 import json
+import yaml
 import matplotlib.pyplot as plt
 
 def estimate_sharpness(filepath,fs=None):
@@ -100,8 +101,29 @@ def detect_blur_fft(filepath, size=60, vis=False, fs=None):
     return mean
 
 def json2dict(jsonfile):
+    """ Import contents of a JSON file as a dict
+    Args:
+        jsonfile (str): json2dict file to read
+    Returns:
+        dict interpreted from JSON file
+    """
     with open(jsonfile, "r") as data:
         dictname = json.loads(data.read())
+    return dictname
+    
+def yaml2dict(yamlfile):
+    """ Import contents of a YAML file as a dict
+    Args:
+        yamlfile (str): YAML file to read
+    Returns:
+        dict interpreted from YAML file
+    """
+    dictname = None
+    with open(yamlfile, "r") as infile:
+        try:
+            dictname = yaml.safe_load(infile)
+        except yaml.YAMLerror as exc:
+            print(exc)
     return dictname
 
 def dts2unix(date_time_string, timezone='eastern'):

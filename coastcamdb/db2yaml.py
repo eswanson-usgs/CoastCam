@@ -1,27 +1,18 @@
 '''
 Eric Swanson
 Purpose: Access the coastcamdb on AWS. Grab data from the DB and create YAML files for the extrinsics,
-instrinsics, and metadata.
+instrinsics, metadata, and the local grid info
 '''
 
 ##### REQUIRED PACKAGES ######
 from pathlib import Path
-from PIL import Image
 from datetime import datetime
-import imageio
-import fsspec
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
 import mysql.connector
 import csv
 import yaml
 
-# These .py files define the objects that load calibration data and do the rectification
+#must have coastcam_funcs.py in the workiung directory
 from coastcam_funcs import *
-from calibration_crs import *
-from rectifier_crs import *
-
 
 ##### FUNCTIONS ######
 def parseCSV(filepath):
@@ -119,22 +110,30 @@ def DBtoDict(conn, station, cam_num):
     
     return extrinsics, intrinsics, metadata, local_origin
 
-def dict2yaml(dict_list, filepath):
+def dicts2yaml(dict_list, filepath, file_names):
     '''
     Create YAML files from a list of dictionaries. Create a YAML file for each
     dictionary in the list.
     Inputs:
         dict_list (list) - a list of dictionary objects
         filepath (string) - directory where YAML files will be saved
+        file_names (list) - list of filenames for the new YAML files, ".yml" not included
     Outputs:
         none, but YAML files are created
     '''
-    test_dict = dict_list[0]
+    i = 0
+    for dictionary in dict_list:
+        path = filepath+"/"+file_names[i]+".yaml"
+        with open(path, 'w') as file:
+            dumper = yaml.dump(dict_list[i], file)
+        i = i + 1
     
-    path = filepath+"/test_file.yaml"
+    # test_dict = dict_list[0]
     
-    with open(path, 'w') as file:
-        dumper = yaml.dump(test_dict, file)
+    # path = filepath+"/test_file.yaml"
+    
+    # with open(path, 'w') as file:
+        # dumper = yaml.dump(test_dict, file)
     
     return
 
@@ -152,29 +151,27 @@ password = params[4]
 #connect to the db
 conn = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
 
-#make lists of cal dicts
-extrinsics_list = []
-intrinsics_list = []
-metadata_list = []
+#directory to create YAML files in 
+filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb"
 
-#for each camera at a station, add extrinsics, intrinsics, metadata dicts to lists. Also get local grid info
+#query to get number of cameras at a station
 station = "CACO-01"
 cursor = conn.cursor(buffered=True)
 query = "SELECT camera_number FROM camera WHERE station_name="+"'"+station+"'"
 cursor.execute(query)
-# for row in cursor:
-  # cam_num = row[0]
-  # extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num)
-  # extrinsics_list.append(extrinsics)
-  # intrinsics_list.append(intrinsics)
-  # metadata_list.append(metadata)  
+
+#For each camera, create dicts for extrinsics, intrinsics, metadata, and local origin
+#create YAML files from these dicts
+for row in cursor:
+  cam_num = row[0]
+  extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num) 
+  dict_list = [extrinsics, intrinsics, metadata, local_origin]
   
-extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, "C1")  
-
-#list of dictionaries created from DB
-dict_list = [extrinsics, intrinsics, metadata, local_origin]
-
-filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb"
-
-dict2yaml(dict_list, filepath)
-
+  #Ex. file names: "CACO01_C1_extr", "CACO01_C1_intr", "CACO01_C1_metadata", "CACO01_localOrigin"
+  file_names = [station+"_"+cam_num+"_extr", 
+                station+"_"+cam_num+"_intr",
+                station+"_"+cam_num+"_metadata",
+                station+"_localOrigin"] 
+  
+  #create YAML files
+  dicts2yaml(dict_list, filepath, file_names)

@@ -37,6 +37,8 @@ def parseCSV(filepath):
     return db_list   
 
 ##### MAIN #####
+
+###TEST TEST####
 #parse csv
 filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
 params = parseCSV(filepath)
