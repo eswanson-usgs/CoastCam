@@ -2,6 +2,13 @@
 Eric Swanson
 Purpose: Access the coastcamdb on AWS. Grab data from the DB and create YAML files for the extrinsics,
 instrinsics, metadata, and the local grid info
+
+Description:
+First connect to the MySQL database using the mysql.connector.connect() method. Query the DB to get
+the number of cameras for a given station. Then, get a dictionary of descriptors for all the fields in the
+DB using the getDBdescriptors() function. For each camera at the given station, get the extrinsics, intrinsics,
+metadata, and local grid info dictionaries using the DBtoDict() function. Finally, write these dictionaries to
+YAML files using DBdict2yaml(). Each of these YAML files also have commented text descriptions for each of the fields.
 '''
 
 ##### REQUIRED PACKAGES ######
@@ -59,7 +66,7 @@ def DBtoDict(conn, station, cam_num):
     '''
     
     #EX. query: SELECT * FROM camera WHERE station_name='CACO-01' AND camera_number='C1'
-    query = "SELECT * FROM camera WHERE station_name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
+    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
     cursor = conn.cursor(dictionary=True)
     cursor.execute(query)
     
@@ -94,7 +101,7 @@ def DBtoDict(conn, station, cam_num):
     
    #dict of camera metadata formatted to USACE
     metadata = {
-        "name": dictionary["station_name"],
+        "name": dictionary["name"],
         "serial_number": dictionary["serial_number"],
         "camera_number": dictionary["camera_number"],
         "calibration_date": dictionary["calibration_date"].strftime("%Y-%m-%d"),
@@ -107,35 +114,62 @@ def DBtoDict(conn, station, cam_num):
         "y": dictionary["y_origin"],
         "angd": dictionary["angd"]
     }
-    
     return extrinsics, intrinsics, metadata, local_origin
+    
+def getDBdescriptors(conn):
+    '''
+    Retrieve the entries from the "descriptors" table in the coastcamdb.
+    Return the entries as a dictionary. These descriptors are text fields that describe the 
+    meaning of the field names in the coastcamdb.
+    Inputs:
+        conn (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
+    Output:
+        descrip_dict (dict) - dictionary of descriptor values
+    '''
+    
+    #query to get row of descriptors
+    query = "SELECT * FROM descriptors"
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(query)
+    
+    #each row in cursor is a dictionary. Only get one row, which. This is descriptor dict
+    for row in cursor:
+        descrip_dict = row
+    return descrip_dict
 
-def dicts2yaml(dict_list, filepath, file_names):
+def DBdict2yaml(dict_list, descrip_dict, filepath, file_names):
     '''
     Create YAML files from a list of dictionaries. Create a YAML file for each
     dictionary in the list.
     Inputs:
         dict_list (list) - a list of dictionary objects
+        descrip_dict (dict) - dictionary of descriptors for fields from the DB
         filepath (string) - directory where YAML files will be saved
         file_names (list) - list of filenames for the new YAML files, ".yml" not included
     Outputs:
         none, but YAML files are created
     '''
+    
     i = 0
+    
+    #for each dictionary, write fields to individual YAML file
     for dictionary in dict_list:
         path = filepath+"/"+file_names[i]+".yaml"
+        
+        #write data and field descriptions to YAML
         with open(path, 'w') as file:
-            dumper = yaml.dump(dict_list[i], file)
+            #write data
+            for field in dict_list[i]:
+                file.write(field + ': ' + str(dict_list[i][field]) + '\n')
+            
+            #leave comments in yaml with text descriptions of the fields
+            for field in dict_list[i]:
+                #ex. #x - x location of camera
+                file.write('#' + field + ' - ' + descrip_dict[field]+ '\n')
+                
         i = i + 1
-    
-    # test_dict = dict_list[0]
-    
-    # path = filepath+"/test_file.yaml"
-    
-    # with open(path, 'w') as file:
-        # dumper = yaml.dump(test_dict, file)
-    
     return
+
 
 ##### MAIN #####
 #parse csv
@@ -157,8 +191,11 @@ filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamd
 #query to get number of cameras at a station
 station = "CACO-01"
 cursor = conn.cursor(buffered=True)
-query = "SELECT camera_number FROM camera WHERE station_name="+"'"+station+"'"
+query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
 cursor.execute(query)
+
+#get dictionary of DB field descriptors
+descrip_dict = getDBdescriptors(conn)
 
 #For each camera, create dicts for extrinsics, intrinsics, metadata, and local origin
 #create YAML files from these dicts
@@ -167,11 +204,11 @@ for row in cursor:
   extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num) 
   dict_list = [extrinsics, intrinsics, metadata, local_origin]
   
-  #Ex. file names: "CACO01_C1_extr", "CACO01_C1_intr", "CACO01_C1_metadata", "CACO01_localOrigin"
+  #Ex. file names: "CACO-01_C1_extr", "CACO-01_C1_intr", "CACO-01_C1_metadata", "CACO-01_localOrigin"
   file_names = [station+"_"+cam_num+"_extr", 
                 station+"_"+cam_num+"_intr",
                 station+"_"+cam_num+"_metadata",
                 station+"_localOrigin"] 
   
   #create YAML files
-  dicts2yaml(dict_list, filepath, file_names)
+  DBdict2yaml(dict_list, descrip_dict, filepath, file_names)

@@ -86,7 +86,7 @@ def DBtoDict(conn, station, cam_num):
     '''
     
     #EX. query: SELECT * FROM camera WHERE station_name='CACO-01' AND camera_number='C1'
-    query = "SELECT * FROM camera WHERE station_name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
+    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
     cursor = conn.cursor(dictionary=True)
     cursor.execute(query)
     
@@ -121,7 +121,7 @@ def DBtoDict(conn, station, cam_num):
     
    #dict of camera metadata formatted to USACE
     metadata = {
-        "name": dictionary["station_name"],
+        "name": dictionary["name"],
         "serial_number": dictionary["serial_number"],
         "camera_number": dictionary["camera_number"],
         "calibration_date": dictionary["calibration_date"].strftime("%Y-%m-%d"),
@@ -160,7 +160,7 @@ metadata_list = []
 #for each camera at a station, add extrinsics, intrinsics, metadata dicts to lists. Also get local grid info
 station = "CACO-01"
 cursor = conn.cursor(buffered=True)
-query = "SELECT camera_number FROM camera WHERE station_name="+"'"+station+"'"
+query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
 cursor.execute(query)
 for row in cursor:
   cam_num = row[0]

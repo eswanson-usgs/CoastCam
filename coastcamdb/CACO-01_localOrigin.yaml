@@ -1,3 +1,6 @@
-angd: 55.0
 x: 410935.0
 y: 4655890.0
+angd: 55.0
+#x - x location of camera
+#y - y location of camera
+#angd - orientation of the local grid
