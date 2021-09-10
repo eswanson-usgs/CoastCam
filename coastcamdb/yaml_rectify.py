@@ -66,7 +66,8 @@ for f in image_files:
     impaths.append(imdir+f)
 ##print(impaths)
 ##print(ftime, e)
-
+ftime = filetime2timestr(image_files[0], timezone='eastern')
+print(ftime)
 
 # Dict providing the metadata that the Axiom code infers from the USACE filename format
 metadata_list = []
@@ -149,6 +150,7 @@ plt.ylabel('Alongshore (m)')
 plt.show()
 
 # write a local file
+print(e)
 ofile = e+'.rectified.jpg'
 imageio.imwrite(ofile,np.flip(rectified_image,0),format='jpg')
 
