@@ -5,16 +5,23 @@ Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. 
 in CACO-01.
 
 Description:
-...
+Using the filepath url of an S3 folder, the station is obtained. For example, CACO-01. A csv file with the parameters
+for logging into the coastcamdb on AWS is parsed using parseCSV() and the resulting parsed parameters are used to connect to the DB.
+The DB is queried and the number of cameras for the station is obtained. The descriptors for the data fields in the DB are
+also fetched using getDBdescriptors(). For each camera at the station, the script checks if yaml files for camera extrinsics,
+intrinsics, metadata, and local origin exist. If not, the script fetches the data from the DB using DBtoDict() and creates
+dictionary objects. Then, it creates yaml files using DBdict2yaml(). Three lists are created that contain extrinsics, intrinsics,
+and metadata, respectively. These lists contain dictionary objects corresponding to each camera. For each camera, an S3 filepath for
+a timex image is created S3 using hardcoded elements for the day folder, year folder, and iomatge unix time. This filepath is added
+to a list of filepaths. Next, 4 dictionary objects are created from the yaml files: one each for extrinsics, instrinsics, metadata,
+and local grid origin info. Using these dictionaries, a rectified image for the given unix time is created using the rectification
+code from Chris Sherwood. This image is written to the local directory. Finally, this image is written to a new "rectified"
+filepath in S3. The old filepath for unrectified images is in the format :
+s3://[S3 bucket]/cameras/[station]/[camera]/[year]/[day]/raw/[image file name]
+The new filepath for rectified images is:
+s3://[S3 bucket]/cameras/[station]/rectified/[year]/[day]/[image filename]
 
 required files:
-CACO01_C1_EOBest.json
-CACO01_C2_EOBest.json
-CACO01_C1_IOBest.json
-CACO01_C2_IOBest.json
-1581508801.c1.timex.jpg
-1600866001.c1.timex.jpg
-1600866001.c2.timex.jpg
 coastcam_funcs.py
 calibration_crs.py
 rectifier_crs.py
@@ -373,22 +380,3 @@ print(rectified_filepath)
 with fs.open(rectified_filepath, 'wb') as fo:
     imageio.imwrite(fo,np.flip(rectified_image,0),format='jpg') 
 
-
-### make an annotated image
-##plt.imshow( rectified_image.astype(int))
-##plt.gca().invert_yaxis()
-##plt.xlabel('Offshore (m)')
-##plt.ylabel('Alongshore (m)')
-### make a North arrow
-##angr = calibration.local_origin['angd']*np.pi/180.
-##dx = np.cos(angr)*90.
-##dy = np.sin(angr)*90.
-##plt.arrow(50,550,dx,dy,linewidth=2,head_width=25,head_length=30,color='white',shape='right')
-##plt.text(100,670,'N',color='white')
-##plt.text(220,670,ftime,fontsize=8,color='gold')
-##plt.title(e)
-##fp = e+'.rectified.png'
-##plt.savefig(fp,dpi=200)
-##
-### alongshore profile of RGB values at 
-##plt.plot(rectified_image[:,60,:])
