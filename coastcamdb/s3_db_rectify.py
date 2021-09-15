@@ -45,7 +45,6 @@ import datetime
 from dateutil import tz
 import os
 
-# These .py files define the objects that load calibration data and do the rectification
 from coastcam_funcs import *
 from calibration_crs import *
 from rectifier_crs import *
@@ -65,10 +64,8 @@ def parseCSV(filepath):
     
     db_list = []
 
-    #read csv
-    with  open(filepath, 'r') as f:
-        #create csv reader object
-        csvreader = csv.reader(f)
+    with  open(filepath, 'r') as csv_file:
+        csvreader = csv.reader(csv_file)
 
         #extract data from csv. Have to use i to track row because iterator object csvreader is not subscriptable
         i = 0
@@ -80,14 +77,14 @@ def parseCSV(filepath):
                 
     return db_list   
     
-def DBtoDict(conn, station, cam_num):
+def DBtoDict(connection, station, camera_number):
     '''
     Read from the database connection and create 4 dictionaries: one for camera extrinsics, one for 
     intrinsic camera parameters,one for camera metadata, and one for the local grid origin and orientation information
     Inputs:
-        conn (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
+        connection (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
         station (string) - Describes the station where the cameras is located. Ex. 'CACO-01'
-        cam_num (string) - Camera to get paramters for, in the format number C#. Ex. 'C1'
+        camera_number (string) - Camera to get paramters for, in the format number C#. Ex. 'C1'
     Outputs:
         extrinsics (dict) - dictionary of camera extrinsic parameters
         intrinsics (dcit) - dictionary of camera intrinsic parameters
@@ -95,9 +92,8 @@ def DBtoDict(conn, station, cam_num):
         local_origin (dict) - dictionary of local grid info 
     '''
     
-    #EX. query: SELECT * FROM camera WHERE station_name='CACO-01' AND camera_number='C1'
-    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
-    cursor = conn.cursor(dictionary=True)
+    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+camera_number+"'"
+    cursor = connection.cursor(dictionary=True)
     cursor.execute(query)
     
     #each row in cursor is a dictionary. Only get one row.
@@ -131,6 +127,7 @@ def DBtoDict(conn, station, cam_num):
     
    #dict of camera metadata formatted to USACE
     metadata = {
+        #name is station name
         "name": dictionary["name"],
         "serial_number": dictionary["serial_number"],
         "camera_number": dictionary["camera_number"],
@@ -147,56 +144,55 @@ def DBtoDict(conn, station, cam_num):
     
     return extrinsics, intrinsics, metadata, local_origin
 
-def getDBdescriptors(conn):
+def getDBdescriptors(connection):
     '''
     Retrieve the entries from the "descriptors" table in the coastcamdb.
     Return the entries as a dictionary. These descriptors are text fields that describe the 
     meaning of the field names in the coastcamdb.
     Inputs:
-        conn (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
+        connection (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
     Output:
-        descrip_dict (dict) - dictionary of descriptor values
+        descriptor_dict (dict) - dictionary of descriptor values
     '''
     
-    #query to get row of descriptors
     query = "SELECT * FROM descriptors"
-    cursor = conn.cursor(dictionary=True)
+    #results are stored as dictionary iun cursor object
+    cursor = connection.cursor(dictionary=True)
     cursor.execute(query)
     
     #each row in cursor is a dictionary. Only get one row, which. This is descriptor dict
     for row in cursor:
-        descrip_dict = row
-    return descrip_dict
+        descriptor_dict = row
+    return descriptor_dict
 
-def DBdict2yaml(dict_list, descrip_dict, filepath, file_names):
+def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
     '''
     Create YAML files from a list of dictionaries. Create a YAML file for each
-    dictionary in the list.
+    dictionary in the list. Write the descriptors for the data field in the YAML file
+    as comments at the end of the fiel.
     Inputs:
         dict_list (list) - a list of dictionary objects
-        descrip_dict (dict) - dictionary of descriptors for fields from the DB
+        descriptor_dict (dict) - dictionary of descriptors for fields from the DB
         filepath (string) - directory where YAML files will be saved
-        file_names (list) - list of filenames for the new YAML files, ".yml" not included
+        file_names (list) - list of filenames for the new YAML files, ".yaml" not included
     Outputs:
         none, but YAML files are created
     '''
     
     i = 0
     
-    #for each dictionary, write fields to individual YAML file
     for dictionary in dict_list:
         path = filepath+"/"+file_names[i]+".yaml"
         
-        #write data and field descriptions to YAML
         with open(path, 'w') as file:
-            #write data
             for field in dict_list[i]:
+                #manually write in YAML formatting. YAML dump sometimes writes out of order
                 file.write(field + ': ' + str(dict_list[i][field]) + '\n')
             
             #leave comments in yaml with text descriptions of the fields
+            #ex. "#x - x location of camera"
             for field in dict_list[i]:
-                #ex. #x - x location of camera
-                file.write('#' + field + ' - ' + descrip_dict[field]+ '\n')
+                file.write('#' + field + ' - ' + descriptor_dict[field]+ '\n')
                 
         i = i + 1
     return
@@ -210,60 +206,46 @@ station_path_elements = station_filepath.split("/")
 
 #remove empty space elements from the list
 for elements in station_path_elements:
-    #if string element is ''
     if len(elements) == 0: 
         station_path_elements.remove(elements)
 
 station = station_path_elements[3]
 
-###Use fsspec to copy image from old path to new path
-##fs = fsspec.filesystem('s3', profile='coastcam')
-
-#parse csv
 csv_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-params = parseCSV(csv_filepath)
+csv_parameters = parseCSV(csv_filepath)
 
-host = params[0]
-port = int(params[1])
-dbname = params[2]
-user = params[3]
-password = params[4]
+host = csv_parameters[0]
+port = int(csv_parameters[1])
+dbname = csv_parameters[2]
+user = csv_parameters[3]
+password = csv_parameters[4]
 
-#connect to the db
-conn = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
+connection = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
 
-#directory to create YAML files in 
 yaml_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb/"
 
-#query to get number of cameras at a station
 station = "CACO-01"
-cursor = conn.cursor(buffered=True)
+#get items back in order they were queried using buffered=True. Results of query stored in cursor object
+cursor = connection.cursor(buffered=True)
 query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
 cursor.execute(query)
 
-#get dictionary of DB field descriptors
-descrip_dict = getDBdescriptors(conn)
+descriptor_dict = getDBdescriptors(connection)
 
-#A list of lists that will store the names of the yaml files
 yaml_list = []
 
-#For each camera, create dicts for extrinsics, intrinsics, metadata, and local origin
-#create YAML files from these dicts
 for row in cursor:
-  cam_num = row[0]
+  camera_number = row[0]
   
-  #Ex. file names: "CACO-01_C1_extr", "CACO-01_C1_intr", "CACO-01_C1_metadata", "CACO-01_localOrigin"
-  file_names = [station+"_"+cam_num+"_extr", 
-                station+"_"+cam_num+"_intr",
-                station+"_"+cam_num+"_metadata",
+  file_names = [station+"_"+camera_number+"_extr", 
+                station+"_"+camera_number+"_intr",
+                station+"_"+camera_number+"_metadata",
                 station+"_localOrigin"]
-  #add YAML file names to list for this camera
   yaml_list.append(file_names)
   
   #flag used to determine if it's necessary to access DB and create YAML files
   yaml_flag = 0
 
-  #check if files exists in folder. If a match is found in directory, increment YAMl flag
   for file in file_names:
       if os.path.isfile(yaml_filepath + file + '.yaml'):
           yaml_flag = yaml_flag + 1
@@ -272,37 +254,33 @@ for row in cursor:
   if yaml_flag == 4:
       continue
   else:
-      #access DB and get data
-      extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num) 
+      extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
       dict_list = [extrinsics, intrinsics, metadata, local_origin]
       
       #create YAML files
-      DBdict2yaml(dict_list, descrip_dict, yaml_filepath, file_names)
+      DBdict2yaml(dict_list, descriptor_dict, yaml_filepath, file_names)
 
-# List of files...three for each camera. Calibration parameters are in .yaml format
 # These are the USGS image filename format.
 extrinsic_cal_files = []
 intrinsic_cal_files = []
 metadata_files = []
-#for each camera, add calibration files + metadata to appropriate lists
 for lists in yaml_list:
     extrinsic_cal_files.append(lists[0] + '.yaml')
     intrinsic_cal_files.append(lists[1] + '.yaml')
     metadata_files.append(lists[2] + '.yaml')
 
-# read images from each camera from their respective filepaths. Day, year, unix time set manully for testing
+#Day, year, unix time set manully for testing
 year = "/2019"
 day = "/347_Dec.13"
 unix_time = "1576270801"
 image_files = []
 for i in range(0,len(yaml_list)):
-    #s3 filename. Ex. 1576270801.c1.timex.jpg
+    #s3 filename
     filename = (unix_time + '.c' + str(i + 1) + '.timex.jpg')
-    #add full filepath to image_files list. Ex. s3://test-cmgp-bucket/cameras/caco-01/c1/2019/347_Dec.13/raw/1576270801.c1.timex.jpg
     image_files.append(station_filepath + 'c' + str(i + 1) + year + day + "/raw/" + filename)
     
-ftime, e = filetime2timestr(image_files[0], timezone='eastern')
-fs = fsspec.filesystem('s3', profile='coastcam')
+file_time, epoch_string = filetime2timestr(image_files[0], timezone='eastern')
+file_system = fsspec.filesystem('s3', profile='coastcam')
 
 # Dict providing the metadata that the Axiom code infers from the USACE filename format
 metadata_list = []
@@ -311,13 +289,12 @@ for f in metadata_files:
 # dict providing origin and orientation of the local grid
 local_origin = yaml2dict(file_names[3]+'.yaml')
 
-# read cal files and make lists of cal dicts
 extrinsics_list = []
-for f in extrinsic_cal_files:
-    extrinsics_list.append( yaml2dict(f) )
+for file in extrinsic_cal_files:
+    extrinsics_list.append( yaml2dict(file) )
 intrinsics_list = []
-for f in intrinsic_cal_files:
-    intrinsics_list.append( yaml2dict(f) )
+for file in intrinsic_cal_files:
+    intrinsics_list.append( yaml2dict(file) )
 
 # check test for coordinate system
 if metadata_list[0]['coordinate_system'].lower() == 'xyz':
@@ -326,14 +303,8 @@ elif metadata_list[0]['coordinate_system'].lower() == 'geo':
     print('Extrinsics are in world coordinates')
 else:
     print('Invalid value of coordinate_system: ',metadata['coordinate_system'])
- 
-# print(extrinsics_list[0])
-# print(extrinsics_list[0]['y']-local_origin['y'])
 
 calibration = CameraCalibration(metadata_list[0],intrinsics_list[0],extrinsics_list[0],local_origin)
-# print(calibration.local_origin)
-# print(calibration.world_extrinsics)
-# print(calibration.local_extrinsics)
 
 xmin = 0.
 xmax = 500.
@@ -350,33 +321,32 @@ rectifier_grid = TargetGrid(
     dy,
     z
 )
-#print(rectifier_grid.X)
 
 rectifier = Rectifier(
     rectifier_grid
 )
 
-rectified_image = rectifier.rectify_images(metadata_list[0], image_files, intrinsics_list, extrinsics_list, local_origin, fs=fs)
+rectified_image = rectifier.rectify_images(metadata_list[0], image_files, intrinsics_list, extrinsics_list, local_origin, fs=file_system)
 plt.imshow(rectified_image.astype(int))
 
 # test rectifying a single image
 single_file = image_files[0]
 single_intrinsic = intrinsics_list[0]
 single_extrinsic = extrinsics_list[0]
-rectified_single_image = rectifier.rectify_images(metadata_list[0], [image_files[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=fs)
+rectified_single_image = rectifier.rectify_images(metadata_list[0], [image_files[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=file_system)
 plt.imshow(rectified_single_image.astype(int))
 plt.gca().invert_yaxis()
 plt.xlabel('Offshore (m)')
 plt.ylabel('Alongshore (m)')
 
 # write a local file
-ofile = e+'.rectified.jpg'
+ofile = epoch_string+'.rectified.jpg'
 imageio.imwrite(ofile,np.flip(rectified_image,0),format='jpg')
 
 #access S3 and write image
 #Ex. rectified image filepath: s3://test-cmgp-bucket/cameras/caco-01/rectified/2019/347_Dec.13/1576270801.rectified.jpg
 rectified_filepath = station_filepath + 'rectified' + year + day + '/' + ofile
 print(rectified_filepath)
-with fs.open(rectified_filepath, 'wb') as fo:
-    imageio.imwrite(fo,np.flip(rectified_image,0),format='jpg') 
+with file_system.open(rectified_filepath, 'wb') as rectified_file:
+    imageio.imwrite(rectified_file,np.flip(rectified_image,0),format='jpg') 
 

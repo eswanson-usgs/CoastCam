@@ -35,10 +35,8 @@ def parseCSV(filepath):
     
     db_list = []
 
-    #read csv
-    with  open(filepath, 'r') as f:
-        #create csv reader object
-        csvreader = csv.reader(f)
+    with  open(filepath, 'r') as csv_file:
+        csvreader = csv.reader(csv_file)
 
         #extract data from csv. Have to use i to track row because iterator object csvreader is not subscriptable
         i = 0
@@ -50,14 +48,14 @@ def parseCSV(filepath):
                 
     return db_list   
     
-def DBtoDict(conn, station, cam_num):
+def DBtoDict(connection, station, camera_number):
     '''
     Read from the database connection and create 4 dictionaries: one for camera extrinsics, one for 
     intrinsic camera parameters,one for camera metadata, and one for the local grid origin and orientation information
     Inputs:
-        conn (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
+        connection (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
         station (string) - Describes the station where the cameras is located. Ex. 'CACO-01'
-        cam_num (string) - Camera to get paramters for, in the format number C#. Ex. 'C1'
+        camera_number (string) - Camera to get paramters for, in the format number C#. Ex. 'C1'
     Outputs:
         extrinsics (dict) - dictionary of camera extrinsic parameters
         intrinsics (dcit) - dictionary of camera intrinsic parameters
@@ -65,9 +63,9 @@ def DBtoDict(conn, station, cam_num):
         local_origin (dict) - dictionary of local grid info 
     '''
     
-    #EX. query: SELECT * FROM camera WHERE station_name='CACO-01' AND camera_number='C1'
-    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
-    cursor = conn.cursor(dictionary=True)
+    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+camera_number+"'"
+    #results are stored as dictionary iun cursor object
+    cursor = connection.cursor(dictionary=True)
     cursor.execute(query)
     
     #each row in cursor is a dictionary. Only get one row.
@@ -116,34 +114,34 @@ def DBtoDict(conn, station, cam_num):
     }
     return extrinsics, intrinsics, metadata, local_origin
     
-def getDBdescriptors(conn):
+def getDBdescriptors(connection):
     '''
     Retrieve the entries from the "descriptors" table in the coastcamdb.
     Return the entries as a dictionary. These descriptors are text fields that describe the 
     meaning of the field names in the coastcamdb.
     Inputs:
-        conn (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
+        connection (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
     Output:
-        descrip_dict (dict) - dictionary of descriptor values
+        descriptor_dict (dict) - dictionary of descriptor values
     '''
     
     #query to get row of descriptors
     query = "SELECT * FROM descriptors"
-    cursor = conn.cursor(dictionary=True)
+    cursor = connection.cursor(dictionary=True)
     cursor.execute(query)
     
     #each row in cursor is a dictionary. Only get one row, which. This is descriptor dict
     for row in cursor:
-        descrip_dict = row
-    return descrip_dict
+        descriptor_dict = row
+    return descriptor_dict
 
-def DBdict2yaml(dict_list, descrip_dict, filepath, file_names):
+def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
     '''
     Create YAML files from a list of dictionaries. Create a YAML file for each
     dictionary in the list.
     Inputs:
         dict_list (list) - a list of dictionary objects
-        descrip_dict (dict) - dictionary of descriptors for fields from the DB
+        descriptor_dict (dict) - dictionary of descriptors for fields from the DB
         filepath (string) - directory where YAML files will be saved
         file_names (list) - list of filenames for the new YAML files, ".yml" not included
     Outputs:
@@ -152,63 +150,55 @@ def DBdict2yaml(dict_list, descrip_dict, filepath, file_names):
     
     i = 0
     
-    #for each dictionary, write fields to individual YAML file
     for dictionary in dict_list:
         path = filepath+"/"+file_names[i]+".yaml"
         
-        #write data and field descriptions to YAML
         with open(path, 'w') as file:
-            #write data
             for field in dict_list[i]:
+                #manually write in YAML formatting. YAML dump sometimes writes out of order
                 file.write(field + ': ' + str(dict_list[i][field]) + '\n')
             
             #leave comments in yaml with text descriptions of the fields
+            #ex. #x - x location of camera
             for field in dict_list[i]:
-                #ex. #x - x location of camera
-                file.write('#' + field + ' - ' + descrip_dict[field]+ '\n')
+                file.write('#' + field + ' - ' + descriptor_dict[field]+ '\n')
                 
         i = i + 1
     return
 
 
 ##### MAIN #####
-#parse csv
-filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-params = parseCSV(filepath)
+csv_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
+csv_parameters = parseCSV(csv_filepath)
 
-host = params[0]
-port = int(params[1])
-dbname = params[2]
-user = params[3]
-password = params[4]
+host = csv_parameters[0]
+port = int(csv_parameters[1])
+dbname = csv_parameters[2]
+user = csv_parameters[3]
+password = csv_parameters[4]
 
-#connect to the db
-conn = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
+connection = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
 
-#directory to create YAML files in 
 filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb"
 
-#query to get number of cameras at a station
 station = "CACO-01"
-cursor = conn.cursor(buffered=True)
+#get items back in order they were queried using buffered=True. Results of query stored in cursor object
+cursor = connection.cursor(buffered=True)
 query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
 cursor.execute(query)
 
-#get dictionary of DB field descriptors
-descrip_dict = getDBdescriptors(conn)
+descriptor_dict = getDBdescriptors(connection)
 
-#For each camera, create dicts for extrinsics, intrinsics, metadata, and local origin
-#create YAML files from these dicts
 for row in cursor:
-  cam_num = row[0]
-  extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num) 
+  camera_number = row[0]
+  extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
   dict_list = [extrinsics, intrinsics, metadata, local_origin]
   
   #Ex. file names: "CACO-01_C1_extr", "CACO-01_C1_intr", "CACO-01_C1_metadata", "CACO-01_localOrigin"
-  file_names = [station+"_"+cam_num+"_extr", 
-                station+"_"+cam_num+"_intr",
-                station+"_"+cam_num+"_metadata",
+  file_names = [station+"_"+camera_number+"_extr", 
+                station+"_"+camera_number+"_intr",
+                station+"_"+camera_number+"_metadata",
                 station+"_localOrigin"] 
   
   #create YAML files
-  DBdict2yaml(dict_list, descrip_dict, filepath, file_names)
+  DBdict2yaml(dict_list, descriptor_dict, filepath, file_names)

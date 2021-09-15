@@ -55,10 +55,8 @@ def parseCSV(filepath):
     
     db_list = []
 
-    #read csv
-    with  open(filepath, 'r') as f:
-        #create csv reader object
-        csvreader = csv.reader(f)
+    with  open(filepath, 'r') as csv_file:
+        csvreader = csv.reader(csv_file)
 
         #extract data from csv. Have to use i to track row because iterator object csvreader is not subscriptable
         i = 0
@@ -70,14 +68,14 @@ def parseCSV(filepath):
                 
     return db_list   
     
-def DBtoDict(conn, station, cam_num):
+def DBtoDict(connection, station, camera_number):
     '''
     Read from the database connection and create 4 dictionaries: one for camera extrinsics, one for 
     intrinsic camera parameters,one for camera metadata, and one for the local grid origin and orientation information
     Inputs:
-        conn (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
+        connection (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
         station (string) - Describes the station where the cameras is located. Ex. 'CACO-01'
-        cam_num (string) - Camera to get paramters for, in the format number C#. Ex. 'C1'
+        camera_number (string) - Camera to get paramters for, in the format number C#. Ex. 'C1'
     Outputs:
         extrinsics (dict) - dictionary of camera extrinsic parameters
         intrinsics (dcit) - dictionary of camera intrinsic parameters
@@ -85,9 +83,9 @@ def DBtoDict(conn, station, cam_num):
         local_origin (dict) - dictionary of local grid info 
     '''
     
-    #EX. query: SELECT * FROM camera WHERE station_name='CACO-01' AND camera_number='C1'
-    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+cam_num+"'"
-    cursor = conn.cursor(dictionary=True)
+    query = "SELECT * FROM camera WHERE name="+"'"+station+"' AND camera_number="+"'"+camera_number+"'"
+    #results are stored as dictionary iun cursor object
+    cursor = connection.cursor(dictionary=True)
     cursor.execute(query)
     
     #each row in cursor is a dictionary. Only get one row.
@@ -139,73 +137,53 @@ def DBtoDict(conn, station, cam_num):
 
 
 ##### MAIN #####
-#parse csv
-filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-params = parseCSV(filepath)
+csv_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
+csv_parameters = parseCSV(csv_filepath)
 
-host = params[0]
-port = int(params[1])
-dbname = params[2]
-user = params[3]
-password = params[4]
+host = csv_parameters[0]
+port = int(csv_parameters[1])
+dbname = csv_parameters[2]
+user = csv_parameters[3]
+password = csv_parameters[4]
 
 #connect to the db
-conn = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
+connection = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
 
 #make lists of cal dicts
 extrinsics_list = []
 intrinsics_list = []
 metadata_list = []
 
-#for each camera at a station, add extrinsics, intrinsics, metadata dicts to lists. Also get local grid info
 station = "CACO-01"
-cursor = conn.cursor(buffered=True)
+#get items back in orer they were queried using buffered=true. cursor object stores results of query
+cursor = connection.cursor(buffered=True)
 query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
 cursor.execute(query)
 for row in cursor:
-  cam_num = row[0]
-  extrinsics, intrinsics, metadata, local_origin = DBtoDict(conn, station, cam_num)
+  camera_number = row[0]
+  extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number)
   extrinsics_list.append(extrinsics)
   intrinsics_list.append(intrinsics)
   metadata_list.append(metadata)  
 
-# # List of files...three for each camera. Calibration parameters are in .json format
-# # These are the USGS image filename format
-# extrinsic_cal_files = ['CACO01_C1_EOBest.json','CACO01_C2_EOBest.json']
-# intrinsic_cal_files = ['CACO01_C1_IOBest.json','CACO01_C2_IOBest.json']
-
 s3 = False # set to False to test local read, set to True to test bucket read
 if s3:
     # read from S3 bucket
-    imdir='cmgp-coastcam/cameras/caco-01/products/'
+    image_directory='cmgp-coastcam/cameras/caco-01/products/'
     image_files = ['1600866001.c1.timex.jpg','1600866001.c2.timex.jpg']
     ftime = filetime2timestr(image_files[0], timezone='eastern')
-    fs = fsspec.filesystem('s3')
+    file_system = fsspec.filesystem('s3')
 else:
     # local test files
-    imdir='./'
+    image_directory='./'
     image_files = ['1581508801.c1.timex.jpg','1581508801.c2.timex.jpg']
-    ftime, e = filetime2timestr(image_files[0], timezone='eastern')
+    ftime, epoch_string = filetime2timestr(image_files[0], timezone='eastern')
 
-    fs = None
+    file_system = None
 
-impaths = []
-for f in image_files:
-    impaths.append(imdir+f)
-# ##print(impaths)
-# ##print(ftime, e)
-
-
-# # Dict providing the metadata that the Axiom code infers from the USACE filename format
-# metadata= {'name': 'CACO-01', 'serial_number': 1, 'camera_number': 'C1', 'calibration_date': '2019-12-12', 'coordinate_system': 'geo'}
-# # dict providing origin and orientation of the local grid
-# local_origin = {'x': 410935.,'y':4655890., 'angd': 55.}
-
-# for f in extrinsic_cal_files:
-    # extrinsics_list.append( json2dict(f) )
-# intrinsics_list = []
-# for f in intrinsic_cal_files:
-    # intrinsics_list.append( json2dict(f) )
+image_paths = []
+for file in image_files:
+    image_paths.append(image_directory+file)
 
 # check test for coordinate system
 if metadata_list[0]['coordinate_system'].lower() == 'xyz':
@@ -214,14 +192,8 @@ elif metadata_list[0]['coordinate_system'].lower() == 'geo':
     print('Extrinsics are in world coordinates')
 else:
     print('Invalid value of coordinate_system: ',metadata_list[0]['coordinate_system'])
-    
-# print(extrinsics_list[0])
-# print(extrinsics_list[0]['y']-local_origin['y'])
 
 calibration = CameraCalibration(metadata_list[0],intrinsics_list[0],extrinsics_list[0],local_origin)
-# print(calibration.local_origin)
-# print(calibration.world_extrinsics)
-# print(calibration.local_extrinsics)
 
 xmin = 0.
 xmax = 500.
@@ -238,7 +210,6 @@ rectifier_grid = TargetGrid(
     dy,
     z
 )
-#print(rectifier_grid.X)
 
 rectifier = Rectifier(
     rectifier_grid
@@ -248,19 +219,16 @@ print(extrinsics_list[0])
 print(intrinsics_list[0])
 print(local_origin)
 
-rectified_image = rectifier.rectify_images(metadata_list[0], impaths, intrinsics_list, extrinsics_list, local_origin, fs=fs)
+rectified_image = rectifier.rectify_images(metadata_list[0], image_paths, intrinsics_list, extrinsics_list, local_origin, fs=file_system)
 plt.imshow(rectified_image.astype(int))
 plt.show()
 
 # test rectifying a single image
-single_file = impaths[0]
+single_file = image_paths[0]
 #print(single_file)
 single_intrinsic = intrinsics_list[0]
 single_extrinsic = extrinsics_list[0]
-# print(type(intrinsics_list))
-# print(type(single_intrinsic))
-# print(single_extrinsic)
-rectified_single_image = rectifier.rectify_images(metadata_list[0], [impaths[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=fs)
+rectified_single_image = rectifier.rectify_images(metadata_list[0], [image_paths[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=file_system)
 plt.imshow(rectified_single_image.astype(int))
 plt.gca().invert_yaxis()
 plt.xlabel('Offshore (m)')
@@ -268,8 +236,8 @@ plt.ylabel('Alongshore (m)')
 plt.show()
 
 # write a local file
-ofile = e+'.rectified.jpg'
-imageio.imwrite(ofile,np.flip(rectified_image,0),format='jpg')
+rectified_file = epoch_string+'.rectified.jpg'
+imageio.imwrite(rectified_file,np.flip(rectified_image,0),format='jpg')
 
 # make an annotated image
 plt.imshow( rectified_image.astype(int))
@@ -283,8 +251,8 @@ dy = np.sin(angr)*90.
 plt.arrow(50,550,dx,dy,linewidth=2,head_width=25,head_length=30,color='white',shape='right')
 plt.text(100,670,'N',color='white')
 plt.text(220,670,ftime,fontsize=8,color='gold')
-plt.title(e)
-fp = e+'.rectified.png'
+plt.title(epoch_string)
+fp = epoch_string+'.rectified.png'
 plt.savefig(fp,dpi=200)
 
 # alongshore profile of RGB values at 

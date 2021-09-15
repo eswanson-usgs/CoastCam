@@ -21,10 +21,8 @@ def parseCSV(filepath):
     
     db_list = []
 
-    #read csv
-    with  open(filepath, 'r') as f:
-        #create csv reader object
-        csvreader = csv.reader(f)
+    with  open(filepath, 'r') as csv_file:
+        csvreader = csv.reader(csv_file)
 
         #extract data from csv. Have to use i to track row because iterator object csvreader is not subscriptable
         i = 0
@@ -39,19 +37,18 @@ def parseCSV(filepath):
 ##### MAIN #####
 
 ###TEST TEST####
-#parse csv
 filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-params = parseCSV(filepath)
+csv_parameters = parseCSV(filepath)
 
-host = params[0]
-port = int(params[1])
-dbname = params[2]
-user = params[3]
-password = params[4]
+host = csv_parameters[0]
+port = int(csv_parameters[1])
+dbname = csv_parameters[2]
+user = csv_parameters[3]
+password = csv_parameters[4]
 
-conn = pymysql.connect(host=host, user=user, port=port, passwd=password, db=dbname)
+connection = pymysql.connect(host=host, user=user, port=port, passwd=password, db=dbname)
 print(type(conn))
 
 #test
-result = pd.read_sql('select * from camera', con=conn)
+result = pd.read_sql('select * from camera', con=connection)
 print(result)
