@@ -37,8 +37,8 @@ def unix2datetime(unixnumber):
 
     # images other than "snaps" end in 1, 2,...but these are not part of the time stamp.
     # replace with zero
-    ts = int( unixnumber[:-1]+'0')
-    date_time_obj =  datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+    time_stamp = int( unixnumber[:-1]+'0')
+    date_time_obj =  datetime.datetime.fromtimestamp(time_stamp, tz=datetime.timezone.utc)
     date_time_str = date_time_obj.strftime('%Y-%m-%d %H:%M:%S')
     return date_time_str, date_time_obj
 
@@ -60,17 +60,15 @@ def getSunriseSunset(unix_time, latitude, longitude, timezone, city = "", countr
 
     #Get datetime object. Returned object is in UTC, must convert to local.
     date_time_str, date_time_obj = unix2datetime(str(unix_time))
-    #convert to EST
-
+    
     #get sunrise and sunset
     #Need to first describe location with astral LocationInfo object
     #Then use astral sun object with attributes sunrise and sunset
     #sun object is a dictionary
-    loc = LocationInfo(city, country, timezone, 41.8918, -69.9611)
-    s = sun(loc.observer, date = date_time_obj, tzinfo = loc.timezone)
-    #extract hour, minute, second of sunrise/sunset
-    sunrise = str(s["sunrise"])[11:19]
-    sunset = str(s["sunset"])[11:19]
+    location = LocationInfo(city, country, timezone, 41.8918, -69.9611)
+    sun_object = sun(location.observer, date = date_time_obj, tzinfo = location.timezone)
+    sunrise = str(sun_object["sunrise"])[11:19]
+    sunset = str(sun_object["sunset"])[11:19]
     return sunrise, sunset
     
 

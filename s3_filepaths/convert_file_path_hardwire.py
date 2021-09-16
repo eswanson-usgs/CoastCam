@@ -45,10 +45,28 @@ def unix2datetime(unixnumber):
 
     # images other than "snaps" end in 1, 2,...but these are not part of the time stamp.
     # replace with zero
-    ts = int( unixnumber[:-1]+'0')
-    date_time_obj =  datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+    time_stamp = int( unixnumber[:-1]+'0')
+    date_time_obj =  datetime.datetime.fromtimestamp(time_stamp, tz=datetime.timezone.utc)
     date_time_str = date_time_obj.strftime('%Y-%m-%d %H:%M:%S')
     return date_time_str, date_time_obj
+
+def check_image(file):
+    """
+    Check if the file is an image (of the proper type)
+    Input:
+        file - (string) filepath of the file to be checked
+    Output:
+        isImage - (bool) variable saying whether or not file is an image
+    """
+    
+    common_image_list = ['.tif', '.tiff', '.bmp', 'jpg', '.jpeg', '.gif', '.png', '.eps', 'raw', 'cr2', '.nef', '.orf', '.sr2']
+    
+    isImage = False
+    for image_type in common_image_list:
+        if file.endswith(image_type):
+            isImage = True
+    return isImage
+        
 
 def copy_s3_image(source_filepath):
     """
@@ -62,60 +80,62 @@ def copy_s3_image(source_filepath):
     Input:
         source_filepath - (string) current filepath of image where the image will be copied from.
     Output:
-        dest_filepath - (string) new filepath image is copied to.
+        destination_filepath - (string) new filepath image is copied to.
     """
+    
+    isImage = check_image(source_filepath)
 
-    old_path_elements = source_filepath.split("/")
+    if isImage == True:
+        source_filepath = "s3://" + source_filepath
+        old_path_elements = source_filepath.split("/")
 
-    #remove empty space elements from the list
-    #list will have 5 elements: "[bucket]", "cameras", "[station]", "products", "[image filename]"
-    for elements in old_path_elements:
-        #if string element is ''
-        if len(elements) == 0: 
-            old_path_elements.remove(elements)
+        #remove empty space elements from the list
+        #list will have 5 elements: "[bucket]", "cameras", "[station]", "products", "[image filename]"
+        for elements in old_path_elements:
+            if len(elements) == 0: 
+                old_path_elements.remove(elements)
 
-    bucket = old_path_elements[1]
-    station = old_path_elements[3]
-    filename = old_path_elements[5]
+        bucket = old_path_elements[1]
+        station = old_path_elements[3]
+        filename = old_path_elements[5]
 
-    #splits up elements of filename into a list
-    filename_elements = filename.split(".")
-    #check to see if filename is properly formatted
-    if len(filename_elements) != 4:
-        return 'Not properly formatted. Not copied.'
+        filename_elements = filename.split(".")
+        #check to see if filename is properly formatted
+        if len(filename_elements) != 4:
+            return 'Not properly formatted. Not copied.'
+        else:
+            image_unix_time = filename_elements[0]
+            image_camera = filename_elements[1] 
+            image_type = filename_elements[2]
+            image_file_type = filename_elements[3]
+
+            #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
+            image_date_time, date_time_obj = unix2datetime(image_unix_time) 
+            year = image_date_time[0:4]
+            month = image_date_time[5:7]
+            day = image_date_time[8:10]
+            
+            #day format for new filepath will have to be in format ddd_mmm.nn
+            #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
+            day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
+
+            #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
+            month_word = calendar.month_name[int(month)]
+            #month in the mmm word form
+            month_formatted = month_word[0:3] 
+
+            new_format_day = day_of_year + "_" + month_formatted + "." + day
+            
+            new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
+            destination_filepath = new_filepath + filename
+
+            #Use fsspec to copy image from old path to new path
+            file_system = fsspec.filesystem('s3', profile='coastcam')
+            file_system.copy(source_filepath, destination_filepath)
+            return destination_filepath
+    #if not image, return blank string. Will be used to determine if file copy needs to be logged in csv
     else:
-        image_unix_time = filename_elements[0]
-        image_camera = filename_elements[1] 
-        image_type = filename_elements[2]
-        image_file_type = filename_elements[3]
-
-        #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
-        image_date_time, date_time_obj = unix2datetime(image_unix_time) 
-        year = image_date_time[0:4]
-        month = image_date_time[5:7]
-        day = image_date_time[8:10]
-        
-        #day format for new filepath will have to be in format ddd_mmm.nn
-        #use built-in python function to convert from known variables to new date
-        #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
-        day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
-
-        #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
-        #get full month in word form
-        month_word = calendar.month_name[int(month)]
-        #month in the mmm word form
-        month_formatted = month_word[0:3] 
-
-        new_format_day = day_of_year + "_" + month_formatted + "." + day
-        
-        new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
-        dest_filepath = new_filepath + filename
-
-        #Use fsspec to copy image from old path to new path
-        fs = fsspec.filesystem('s3', profile='coastcam')
-        fs.copy(source_filepath, dest_filepath)
-        return dest_filepath
-
+        return 'Not an image. Not copied.'
 
 
 def write2csv(csv_list, csv_path):
@@ -131,12 +151,10 @@ def write2csv(csv_list, csv_path):
     #header
     fieldnames = ['source filepath', 'destination filepath'] 
 
-    #datetime info for naming csv
     now = datetime.datetime.now()
     now_string = now.strftime("%d-%m-%Y %H_%M_%S")
     csv_name = csv_path + 'image copy log ' + now_string + '.csv'
 
-    #write to file
     with open(csv_name, 'w', encoding='UTF8', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(fieldnames)
@@ -149,12 +167,10 @@ print("start:", datetime.datetime.now())
 #source folder filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
 source_folder = "s3://cmgp-coastcam/cameras/rincon/products/"  
 
-#access list of images in source folder using fsspec
 #station caco-01 for testing
-fs = fsspec.filesystem('s3', profile='coastcam')
-image_list = fs.glob(source_folder+'/*')
+file_system = fsspec.filesystem('s3', profile='coastcam')
+image_list = file_system.glob(source_folder+'/*')
 
-#list of common image types
 common_image_list = ['.tif', '.tiff', '.bmp', 'jpg', '.jpeg', '.gif', '.png', '.eps', 'raw', 'cr2', '.nef', '.orf', '.sr2']
 
 #used to track copied images in a csv
@@ -165,31 +181,22 @@ csv_list = []
 pickup_time = 1612085400
 
 #loop through folder of images
-#check if image is of proper file types
-#if so, copy images
 for image in image_list:
-    #loop through list of possible image types
     for image_type in common_image_list: 
         #variable to check if file ends with image type in common_image_list
-        good_ending = False 
+        isImage = False 
         if image.endswith(image_type):
-            good_ending = True
+            isImage = True
             break
-    if image.endswith('.txt') or good_ending == False:
-        #This is not an image. Skip file
+    if image.endswith('.txt') or isImage == False:
         continue
-    #this is an image
     else:
-        #get source and destination filepaths
-        #copy images
-
         #######FOR PICKING UP WHERE LIST LEFT OFF######
         old_path_elements = image.split("/")
 
         #remove empty space elements from the list
         #list will have 5 elements: "[bucket]", "cameras", "[station]", "products", "[image filename]"
         for elements in old_path_elements:
-            #if string element is ''
             if len(elements) == 0: 
                 old_path_elements.remove(elements)
 
@@ -197,7 +204,6 @@ for image in image_list:
         station = old_path_elements[3]
         filename = old_path_elements[4]
 
-        #splits up elements of filename into a list
         filename_elements = filename.split(".") 
         image_unix_time = filename_elements[0]
         image_camera = filename_elements[1] 
@@ -207,14 +213,12 @@ for image in image_list:
         if int(image_unix_time) > pickup_time:
             
         #################################################
-        ######
             source_filepath = "s3://" + image
             dest_filepath = copy_s3_image(source_filepath)
 
             csv_entry = [source_filepath, dest_filepath]
             csv_list.append(csv_entry)
 
-#create csv file
 now = datetime.datetime.now()
 now_string = now.strftime("%d-%m-%Y %H_%M_%S")
 csv_name = 'image copy log ' + now_string + '.csv'
