@@ -168,32 +168,29 @@ def getDBdescriptors(connection):
 def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
     '''
     Create YAML files from a list of dictionaries. Create a YAML file for each
-    dictionary in the list. Write the descriptors for the data field in the YAML file
-    as comments at the end of the fiel.
+    dictionary in the list.
     Inputs:
         dict_list (list) - a list of dictionary objects
         descriptor_dict (dict) - dictionary of descriptors for fields from the DB
         filepath (string) - directory where YAML files will be saved
-        file_names (list) - list of filenames for the new YAML files, ".yaml" not included
+        file_names (list) - list of filenames for the new YAML files, ".yml" not included
     Outputs:
         none, but YAML files are created
     '''
-    
+
     i = 0
-    
     for dictionary in dict_list:
         path = filepath+"/"+file_names[i]+".yaml"
         
         with open(path, 'w') as file:
-            for field in dict_list[i]:
+            for field in dictionary:
                 #manually write in YAML formatting. YAML dump sometimes writes out of order
-                file.write(field + ': ' + str(dict_list[i][field]) + '\n')
+                file.write(field + ': ' + str(dictionary[field]) + '\n')
             
             #leave comments in yaml with text descriptions of the fields
-            #ex. "#x - x location of camera"
-            for field in dict_list[i]:
+            #ex. #x - x location of camera
+            for field in dictionary:
                 file.write('#' + field + ' - ' + descriptor_dict[field]+ '\n')
-                
         i = i + 1
     return
 

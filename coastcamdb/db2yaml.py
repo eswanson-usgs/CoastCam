@@ -17,6 +17,7 @@ from datetime import datetime
 import mysql.connector
 import csv
 import yaml
+import datetime
 
 #must have coastcam_funcs.py in the workiung directory
 from coastcam_funcs import *
@@ -147,27 +148,26 @@ def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
     Outputs:
         none, but YAML files are created
     '''
-    
+
     i = 0
-    
     for dictionary in dict_list:
         path = filepath+"/"+file_names[i]+".yaml"
         
         with open(path, 'w') as file:
-            for field in dict_list[i]:
+            for field in dictionary:
                 #manually write in YAML formatting. YAML dump sometimes writes out of order
-                file.write(field + ': ' + str(dict_list[i][field]) + '\n')
+                file.write(field + ': ' + str(dictionary[field]) + '\n')
             
             #leave comments in yaml with text descriptions of the fields
             #ex. #x - x location of camera
-            for field in dict_list[i]:
+            for field in dictionary:
                 file.write('#' + field + ' - ' + descriptor_dict[field]+ '\n')
-                
         i = i + 1
     return
 
 
 ##### MAIN #####
+print("start:", datetime.datetime.now())
 csv_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
 csv_parameters = parseCSV(csv_filepath)
 
@@ -200,5 +200,7 @@ for row in cursor:
                 station+"_"+camera_number+"_metadata",
                 station+"_localOrigin"] 
   
-  #create YAML files
+  #create YAML files using asynchronous parallel processing
   DBdict2yaml(dict_list, descriptor_dict, filepath, file_names)
+
+print("end:", datetime.datetime.now())
