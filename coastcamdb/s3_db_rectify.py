@@ -337,13 +337,12 @@ plt.xlabel('Offshore (m)')
 plt.ylabel('Alongshore (m)')
 
 # write a local file
-ofile = epoch_string+'.rectified.jpg'
+ofile = epoch_string+'.timex.merge.jpg'
 imageio.imwrite(ofile,np.flip(rectified_image,0),format='jpg')
 
 #access S3 and write image
 #Ex. rectified image filepath: s3://test-cmgp-bucket/cameras/caco-01/rectified/2019/347_Dec.13/1576270801.rectified.jpg
-rectified_filepath = station_filepath + 'rectified' + year + day + '/' + ofile
-print(rectified_filepath)
+rectified_filepath = station_filepath + 'cx/merge' + year + day + '/' + ofile
 with file_system.open(rectified_filepath, 'wb') as rectified_file:
     imageio.imwrite(rectified_file,np.flip(rectified_image,0),format='jpg') 
 
