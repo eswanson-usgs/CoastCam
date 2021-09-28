@@ -1,8 +1,8 @@
 '''
 Eric Swanson
 Purpose: Access a pair of images on S3. Access the coastcamdb on AWS and get metadata. Rectify the images using code from
-Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. For now this works on one set of images
-in CACO-01.
+Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on a folder
+of images in S3. A folder in this case would refere to a DAY of imagery
 
 Description:
 Using the filepath url of an S3 folder, the station is obtained. For example, CACO-01. A csv file with the parameters
@@ -44,6 +44,7 @@ import calendar
 import datetime
 from dateutil import tz
 import os
+import re
 
 from coastcam_funcs import *
 from calibration_crs import *
@@ -194,8 +195,105 @@ def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
         i = i + 1
     return
 
+def getFilename(filepath):
+    '''
+    Given a filepath, retrieve the filename at the end of it.
+    Input:
+        filepath (string) - full filepath of file
+    Ouput:
+        path_elements[-1] (string) - last element of the split up filepath. This is the filename.
+    '''
+
+    path_elements = filepath.split("/")
+    #filename is last element of filepath
+    return path_elements[-1]
+
+def unixFromFilename(filename):
+    '''
+    Given a filename in the format [unix time].[camera number].[image type].jpg, return image unix time
+    Input:
+        filename (string) - name fo the file in the format statewd above
+    Output:
+        filename_elements[0] (string) - first elements of the split up filename. This is the unix time string.
+    '''
+
+    filename_elements = filename.split(".")
+    #unix time is first element of the filename
+    return filename_elements[0]
+
+def mergeImages(metadata, image_files, intrinsics, extrinsics, local_origin):
+    '''
+    Given a set of image_files, metadata, intrinsics, extrinsics, and local origin info, merge (rectify) a set of images.
+    Inputs:
+        metadata (dict) - dictionary of camera metadata
+        image_files (list) - list of image files (filepaths) to be merged
+        instrinsics (dict) - dictionary of camera instrinsics
+        extrinsics (dict) - dictionary of camera extrinsics
+        local_origin (dict) - dictionary of station local origin info
+    Outputs:
+        rectified_image (image NEED TO FIND OBJECT TYPE) - rectified image file
+    '''
+    rectified_image = rectifier.rectify_images(metadata, image_files, intrinsics, extrinsics, local_origin, fs=file_system)
+    return rectified_image
+
+
+##### CLASSES #####
+class Camera:
+    '''
+    This class represents a camera object for a coastcam station
+    '''    
+    def __init__(self, camera_number, filepath):
+        '''
+        Initialization function for Camera class. Set class attribute values
+        Inputs:
+            camera_number (string) - camera number string
+            filepath (string) - S3 filepath for camera folder
+        Outputs:
+            none
+        '''
+        self.camera_number = camera_number
+        self.filepath = filepath
+
+    def onlyTimex(self):
+        '''
+        Remove all image files from the camera file list except for timex images
+        Inputs:
+            none
+        Outputs:
+            none
+        '''
+        keep_list = []
+        #need to first make list of files that will be kept. If you directly removed the unmatched files,
+        #it would not iterate through the whole loop because the list would be shorter
+        for file in self.file_list:
+            if re.match(".+timex*", file):
+                keep_list.append(file)
+        self.file_list = keep_list
+
+    def createDict(self):
+        '''
+        Create dictionary of values for the class. The key value is a unix time. The corresponding data value
+        is the S3 filepath for the image the specified unix time.
+        Inputs:
+            none
+        Outputs:
+            none
+        '''
+        self.unix_list = []
+        self.unix_file_dict = {}
+        for file in self.file_list:
+            filename = getFilename(file)
+            unix_time = unixFromFilename(filename)
+            self.unix_list.append(unix_time)
+            self.unix_file_dict[unix_time] = file
+
+        
 
 ##### MAIN #####
+print("start:", datetime.datetime.now())
+            
+file_system = fsspec.filesystem('s3', profile='coastcam')
+        
 #S3 filepath for station
 station_filepath = "s3://test-cmgp-bucket/cameras/caco-01/"
 
@@ -231,8 +329,16 @@ descriptor_dict = getDBdescriptors(connection)
 
 yaml_list = []
 
+#list of Camera objects
+cameras = []
+
+#start iterator at 1 because cameras start at c1
+i = 1
 for row in cursor:
   camera_number = row[0]
+  #ex. filepath: s3://test-cmgp-bucket/cameras/caco-01/c1/
+  camera_filepath = station_filepath + 'c'+ str(i)
+  cameras.append(Camera(camera_number, camera_filepath))
   
   file_names = [station+"_"+camera_number+"_extr", 
                 station+"_"+camera_number+"_intr",
@@ -249,6 +355,8 @@ for row in cursor:
 
   #if 4 YAML files exist for station camera, don't need to access DB and create YAML files
   if yaml_flag == 4:
+      #keep track of loop iteration
+      i = i + 1
       continue
   else:
       extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
@@ -256,6 +364,7 @@ for row in cursor:
       
       #create YAML files
       DBdict2yaml(dict_list, descriptor_dict, yaml_filepath, file_names)
+      i = i + 1
 
 # These are the USGS image filename format.
 extrinsic_cal_files = []
@@ -266,26 +375,12 @@ for lists in yaml_list:
     intrinsic_cal_files.append(lists[1] + '.yaml')
     metadata_files.append(lists[2] + '.yaml')
 
-#Day, year, unix time set manully for testing
-year = "/2019"
-day = "/347_Dec.13"
-unix_time = "1576270801"
-image_files = []
-for i in range(0,len(yaml_list)):
-    #s3 filename
-    filename = (unix_time + '.c' + str(i + 1) + '.timex.jpg')
-    image_files.append(station_filepath + 'c' + str(i + 1) + year + day + "/raw/" + filename)
-    
-file_time, epoch_string = filetime2timestr(image_files[0], timezone='eastern')
-file_system = fsspec.filesystem('s3', profile='coastcam')
-
-# Dict providing the metadata that the Axiom code infers from the USACE filename format
-metadata_list = []
-for f in metadata_files:
-    metadata_list.append(yaml2dict(f))
 # dict providing origin and orientation of the local grid
 local_origin = yaml2dict(file_names[3]+'.yaml')
-
+# Dict providing the metadata that the Axiom code infers from the USACE filename format
+metadata_list = []
+for file in metadata_files:
+    metadata_list.append(yaml2dict(file))
 extrinsics_list = []
 for file in extrinsic_cal_files:
     extrinsics_list.append( yaml2dict(file) )
@@ -300,6 +395,28 @@ elif metadata_list[0]['coordinate_system'].lower() == 'geo':
     print('Extrinsics are in world coordinates')
 else:
     print('Invalid value of coordinate_system: ',metadata['coordinate_system'])
+    
+#Day, year set manually for testing
+year = "/2019"
+day = "/347_Dec.13"
+
+#dictionary contains lists of image files used for rectification . The key is the unix time, the data is the list of image files
+#from each camera
+image_files_dict = {}
+#for each camera retrieve all photos for specified day. Narrow list to only timex
+for cam in cameras:
+    cam.file_list = file_system.glob(cam.filepath + year + day + '/raw/')
+    cam.onlyTimex()
+    cam.createDict()
+
+    #For each unix time where image is taken, create list of images from each camera for that time
+    for entry in cam.unix_file_dict:
+        if entry not in image_files_dict:
+            image_files_dict[entry] = []
+            image_files_dict[entry].append(cam.unix_file_dict[entry])
+        #if unix time key already exists in dict, add another file for that time to the corresponding list
+        else:
+            image_files_dict[entry].append(cam.unix_file_dict[entry])
 
 calibration = CameraCalibration(metadata_list[0],intrinsics_list[0],extrinsics_list[0],local_origin)
 
@@ -323,26 +440,28 @@ rectifier = Rectifier(
     rectifier_grid
 )
 
-rectified_image = rectifier.rectify_images(metadata_list[0], image_files, intrinsics_list, extrinsics_list, local_origin, fs=file_system)
-plt.imshow(rectified_image.astype(int))
+rectified_image_list = []
+unix_time_list = []
+for unix_time in image_files_dict:
+    #Important: This will only merge images for times when there is an image from EVERY camera at the station
+    if len(image_files_dict[unix_time]) != len(cameras):
+        continue
+    else:
+        unix_time_list.append(unix_time)
+        rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], intrinsics_list, extrinsics_list, local_origin, fs=file_system)
+        rectified_image_list.append(rectified_image)
 
-# test rectifying a single image
-single_file = image_files[0]
-single_intrinsic = intrinsics_list[0]
-single_extrinsic = extrinsics_list[0]
-rectified_single_image = rectifier.rectify_images(metadata_list[0], [image_files[1]], [intrinsics_list[1]], [extrinsics_list[1]], local_origin, fs=file_system)
-plt.imshow(rectified_single_image.astype(int))
-plt.gca().invert_yaxis()
-plt.xlabel('Offshore (m)')
-plt.ylabel('Alongshore (m)')
+# write local files
+k =0 
+for image in rectified_image_list:
+    ofile = unix_time_list[k]+'.timex.merge.jpg'
+    imageio.imwrite('./rectified images/' + ofile,np.flip(image,0),format='jpg')
+    
+    #access S3 and write image
+    #Ex. rectified image filepath: s3://test-cmgp-bucket/cameras/caco-01/cx/merge/2019/347_Dec.13/1576270801.timex.merge.jpg
+    rectified_filepath = station_filepath + 'cx/merge' + year + day + '/' + ofile
+    with file_system.open(rectified_filepath, 'wb') as rectified_file:
+        imageio.imwrite(rectified_file,np.flip(image,0),format='jpg') 
+    k = k + 1
 
-# write a local file
-ofile = epoch_string+'.timex.merge.jpg'
-imageio.imwrite(ofile,np.flip(rectified_image,0),format='jpg')
-
-#access S3 and write image
-#Ex. rectified image filepath: s3://test-cmgp-bucket/cameras/caco-01/cx/merge/2019/347_Dec.13/1576270801.timex.merge.jpg
-rectified_filepath = station_filepath + 'cx/merge' + year + day + '/' + ofile
-with file_system.open(rectified_filepath, 'wb') as rectified_file:
-    imageio.imwrite(rectified_file,np.flip(rectified_image,0),format='jpg') 
-
+print("end:", datetime.datetime.now())
