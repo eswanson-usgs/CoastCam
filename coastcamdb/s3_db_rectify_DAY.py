@@ -388,7 +388,6 @@ intrinsics_list = []
 for file in intrinsic_cal_files:
     intrinsics_list.append( yaml2dict(file) )
 
-# check test for coordinate system
 if metadata_list[0]['coordinate_system'].lower() == 'xyz':
     print('Extrinsics are local coordinates')
 elif metadata_list[0]['coordinate_system'].lower() == 'geo':
@@ -443,11 +442,27 @@ rectifier = Rectifier(
 rectified_image_list = []
 unix_time_list = []
 for unix_time in image_files_dict:
-    #Important: This will only merge images for times when there is an image from EVERY camera at the station
+    unix_time_list.append(unix_time)
+    #If image doesn't exist for each camera, create rectified image from only cameras with image file for given unix time
     if len(image_files_dict[unix_time]) != len(cameras):
-        continue
+        #instrinsics, extrinsics only for cameras who have file for corresponding unix time
+        temp_intrinsics = []
+        temp_extrinsics = []
+        #variable to keep track of which camera the loop is currently on
+        c = 0
+        for cam in cameras:
+            try:
+                #variable used to test if the camera has an entry at the given unix time
+                test = cam.unix_file_dict[unix_time]
+                temp_intrinsics.append(intrinsics_list[c])
+                temp_extrinsics.append(extrinsics_list[c])
+                c = c + 1
+            except KeyError:
+                c = c + 1
+                continue 
+        rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], temp_intrinsics, temp_extrinsics, local_origin, fs=file_system)
+        rectified_image_list.append(rectified_image)        
     else:
-        unix_time_list.append(unix_time)
         rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], intrinsics_list, extrinsics_list, local_origin, fs=file_system)
         rectified_image_list.append(rectified_image)
 
