@@ -19,7 +19,7 @@ code from Chris Sherwood. This image is written to the local directory. Finally,
 filepath in S3. The old filepath for unrectified images is in the format :
 s3://[S3 bucket]/cameras/[station]/[camera]/[year]/[day]/raw/[image file name]
 The new filepath for rectified images is:
-s3://[S3 bucket]/cameras/[station]/rectified/[year]/[day]/[image filename]
+s3://[S3 bucket]/cameras/[station]/merge/[year]/[day]/[image filename]
 
 required files:
 coastcam_funcs.py
