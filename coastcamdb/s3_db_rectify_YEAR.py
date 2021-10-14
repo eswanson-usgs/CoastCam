@@ -458,6 +458,7 @@ for cam in cameras:
             global_day_list.append(day)   
 
 for day in global_day_list:
+    print(day)
     #day_cam_list keeps track of which cameras have files for that day.
     day_cam_list = []
     for cam in cameras:

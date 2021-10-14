@@ -454,113 +454,109 @@ for camera in cameras:
             global_year_list.append(year)
 
 for year in global_year_list:
-    if year == '2019':
-        print('skip 2019')
-        continue
-    else:
-        #unix times and rectified images collected for year
-        #rectified_image_list = []
-        #unix_time_list = []
-        print('\n', year)
-        #year_cam_list keeps track of which cameras have files for that year.
-        year_cam_list = []
-        for camera in cameras:
-            full_year_path = "test-cmgp-bucket/cameras/caco-01/" + camera.camera_number.lower() + '/' + year
-            if full_year_path not in camera.year_list:
-                print(camera.camera_number + " does not have year: " + year)
-                #for camera, keep track if it has the current year. Used below to skip processing for S3 day folders
-                camera.no_year_flag = 1 
+    #unix times and rectified images collected for year
+    #rectified_image_list = []
+    #unix_time_list = []
+    print('\n', year)
+    #year_cam_list keeps track of which cameras have files for that year.
+    year_cam_list = []
+    for camera in cameras:
+        full_year_path = "test-cmgp-bucket/cameras/caco-01/" + camera.camera_number.lower() + '/' + year
+        if full_year_path not in camera.year_list:
+            print(camera.camera_number + " does not have year: " + year)
+            #for camera, keep track if it has the current year. Used below to skip processing for S3 day folders
+            camera.no_year_flag = 1 
+        else:
+            year_cam_list.append(camera)
+            camera.no_year_flag = 0
+        #print(f'camera: {camera.camera_number}, flag: {camera.no_year_flag}')
+            
+    #have to loop through each day in each year
+    for camera in year_cam_list:
+        #create global list of days that have imagery in S3 based on list of days from each camera
+        global_day_list = []
+        for cam in cameras:
+            cam.day_list = file_system.glob(cam.filepath + '/' + year + '/')
+            for day in cam.day_list:
+                #remove extra stuff from filepath to get formatted day
+                day = day.split('/')[-1]
+                if day not in global_day_list:
+                    global_day_list.append(day)
+        #print (camera.camera_number, '\n', global_day_list)
+          
+    for day in global_day_list:
+        rectified_image_list = []
+        unix_time_list = []   
+        print(day)
+        #day_cam_list keeps track of which cameras have files for that day.
+        day_cam_list = []
+        for cam in cameras:
+            #skip if camera doesn't have imagery for this year4.
+            if cam.no_year_flag == 1:
+                continue
             else:
-                year_cam_list.append(camera)
-                camera.no_year_flag = 0
-            #print(f'camera: {camera.camera_number}, flag: {camera.no_year_flag}')
-                
-        #have to loop through each day in each year
-        for camera in year_cam_list:
-            #create global list of days that have imagery in S3 based on list of days from each camera
-            global_day_list = []
-            for cam in cameras:
-                cam.day_list = file_system.glob(cam.filepath + '/' + year + '/')
-                for day in cam.day_list:
-                    #remove extra stuff from filepath to get formatted day
-                    day = day.split('/')[-1]
-                    if day not in global_day_list:
-                        global_day_list.append(day)
-            #print (camera.camera_number, '\n', global_day_list)
-              
-        for day in global_day_list:
-            rectified_image_list = []
-            unix_time_list = []   
-            print(day)
-            #day_cam_list keeps track of which cameras have files for that day.
-            day_cam_list = []
-            for cam in cameras:
-                #skip if camera doesn't have imagery for this year4.
-                if cam.no_year_flag == 1:
-                    continue
+                full_day_path = "test-cmgp-bucket/cameras/caco-01/" + cam.camera_number.lower() + '/' + year + '/' + day
+                if full_day_path not in cam.day_list:
+                    print(cam.camera_number + " does not have day: " + day)
                 else:
-                    full_day_path = "test-cmgp-bucket/cameras/caco-01/" + cam.camera_number.lower() + '/' + year + '/' + day
-                    if full_day_path not in cam.day_list:
-                        print(cam.camera_number + " does not have day: " + day)
-                    else:
-                        day_cam_list.append(cam)
-                    
-
-            #do steps for rectifying a DAY of imagery only for cameras with imagery for given day
-            #dictionary contains lists of image files used for rectification . The key = unix time, the data = list of image files from each camera
-            image_files_dict = {}
-            for cam in day_cam_list:
-                cam.file_list = file_system.glob(cam.filepath + '/' + year + '/' + day + '/raw/')
-                cam.onlyTimex()
-                cam.createDict()
-
-                #For each unix time where image is taken, create list of images from each camera for that time
-                for entry in cam.unix_file_dict:
-                    if entry not in image_files_dict:
-                        image_files_dict[entry] = []
-                        image_files_dict[entry].append(cam.unix_file_dict[entry])
-                    #if unix time key already exists in dict, add another file for that time to the corresponding list
-                    else:
-                        image_files_dict[entry].append(cam.unix_file_dict[entry])
-
-            for unix_time in image_files_dict:
-                unix_time_list.append(unix_time)
-                #If image doesn't exist for each camera, create rectified image from only cameras with image file for given unix time
-                if len(image_files_dict[unix_time]) != len(cameras):
-                    #instrinsics, extrinsics only for cameras who have file for corresponding unix time
-                    temp_intrinsics = []
-                    temp_extrinsics = []
-                    #variable to keep track of which camera the loop is currently on
-                    c = 0
-                    for cam in cameras:
-                        if cam.no_year_flag == 1:
-                            continue
-                        else:
-                            try:
-                                #variable used to test if the camera has an entry at the given unix time
-                                test = cam.unix_file_dict[unix_time]
-                                temp_intrinsics.append(intrinsics_list[c])
-                                temp_extrinsics.append(extrinsics_list[c])
-                                c = c + 1
-                            except KeyError:
-                                c = c + 1
-                                continue 
-                    rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], temp_intrinsics, temp_extrinsics, local_origin, fs=file_system)
-                    rectified_image_list.append(rectified_image)        
-                else:
-                    rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], intrinsics_list, extrinsics_list, local_origin, fs=file_system)
-                    rectified_image_list.append(rectified_image)
-
-            k =0 
-            for image in rectified_image_list:
-                ofile = unix_time_list[k]+'.timex.merge.jpg'
-                imageio.imwrite('./rectified images/' + ofile,np.flip(image,0),format='jpg')
+                    day_cam_list.append(cam)
                 
-                #access S3 and write image
-                #Ex. rectified image filepath: s3://test-cmgp-bucket/cameras/caco-01/cx/merge/2019/347_Dec.13/1576270801.timex.merge.jpg
-                rectified_filepath = station_filepath + 'cx/merge' + '/' + year + '/' + day + '/' + ofile
-                with file_system.open(rectified_filepath, 'wb') as rectified_file:
-                    imageio.imwrite(rectified_file,np.flip(image,0),format='jpg') 
-                k = k + 1
+
+        #do steps for rectifying a DAY of imagery only for cameras with imagery for given day
+        #dictionary contains lists of image files used for rectification . The key = unix time, the data = list of image files from each camera
+        image_files_dict = {}
+        for cam in day_cam_list:
+            cam.file_list = file_system.glob(cam.filepath + '/' + year + '/' + day + '/raw/')
+            cam.onlyTimex()
+            cam.createDict()
+
+            #For each unix time where image is taken, create list of images from each camera for that time
+            for entry in cam.unix_file_dict:
+                if entry not in image_files_dict:
+                    image_files_dict[entry] = []
+                    image_files_dict[entry].append(cam.unix_file_dict[entry])
+                #if unix time key already exists in dict, add another file for that time to the corresponding list
+                else:
+                    image_files_dict[entry].append(cam.unix_file_dict[entry])
+
+        for unix_time in image_files_dict:
+            unix_time_list.append(unix_time)
+            #If image doesn't exist for each camera, create rectified image from only cameras with image file for given unix time
+            if len(image_files_dict[unix_time]) != len(cameras):
+                #instrinsics, extrinsics only for cameras who have file for corresponding unix time
+                temp_intrinsics = []
+                temp_extrinsics = []
+                #variable to keep track of which camera the loop is currently on
+                c = 0
+                for cam in cameras:
+                    if cam.no_year_flag == 1:
+                        continue
+                    else:
+                        try:
+                            #variable used to test if the camera has an entry at the given unix time
+                            test = cam.unix_file_dict[unix_time]
+                            temp_intrinsics.append(intrinsics_list[c])
+                            temp_extrinsics.append(extrinsics_list[c])
+                            c = c + 1
+                        except KeyError:
+                            c = c + 1
+                            continue 
+                rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], temp_intrinsics, temp_extrinsics, local_origin, fs=file_system)
+                rectified_image_list.append(rectified_image)        
+            else:
+                rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], intrinsics_list, extrinsics_list, local_origin, fs=file_system)
+                rectified_image_list.append(rectified_image)
+
+        k =0 
+        for image in rectified_image_list:
+            ofile = unix_time_list[k]+'.timex.merge.jpg'
+            imageio.imwrite('./rectified images/' + ofile,np.flip(image,0),format='jpg')
+            
+            #access S3 and write image
+            #Ex. rectified image filepath: s3://test-cmgp-bucket/cameras/caco-01/cx/merge/2019/347_Dec.13/1576270801.timex.merge.jpg
+            rectified_filepath = station_filepath + 'cx/merge' + '/' + year + '/' + day + '/' + ofile
+            with file_system.open(rectified_filepath, 'wb') as rectified_file:
+                imageio.imwrite(rectified_file,np.flip(image,0),format='jpg') 
+            k = k + 1
 
 print("end:", datetime.datetime.now())
