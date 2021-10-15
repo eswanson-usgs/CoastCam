@@ -13,9 +13,11 @@ also fetched using getDBdescriptors(). For each camera at the station, the scrip
 intrinsics, metadata, and local origin exist. If not, the script fetches the data from the DB using DBtoDict() and creates
 dictionary objects. Then, it creates yaml files using DBdict2yaml(). Three lists are created that contain extrinsics, intrinsics,
 and metadata, respectively. These lists contain dictionary objects corresponding to the YAML files for each camera. After this, a CameraCalibration object and TargetGrid object are created.
-For the defined year in the S3 filepath, a global list of day directories in the year directory is obtained. For each day, a list
-of cameras is created. Only cameras that have imagery (in S3) for that day are added to the list. Using this list, rectification is performed
-on all the images for that day. This process is as follows:
+For the defined year in the S3 filepath, a global list of day directories in the year directory is obtained. For each year
+of imagery at the station, a listis created to hold the cameras that have imagery for that year. If a camera
+doesn't have imagery for the year, a flag attribute is set to True to reflect that. For each year, A global day list is created
+that contains every day in the year that contains imagery (whether it's from one or multiple cameras). Using this list, rectification
+is performed on all the images for each day in S3. This process for rectifying a day of imagery is as follows:
 
 For each camera, an S3 filepath for a list of all the "raw" images for the camera's corresponding S3 filepath is obtained. Each list is stripped of all images except
 timex images using the onlyTimex() method for the camera object. Using the Cmaera object's createDict() method, a dictionary attribute is
@@ -355,7 +357,6 @@ descriptor_dict = getDBdescriptors(connection)
 
 yaml_list = []
 
-#list of Camera objects
 cameras = []
 
 #start iterator at 1 because cameras start at c1
@@ -381,14 +382,12 @@ for row in cursor:
 
   #if 4 YAML files exist for station camera, don't need to access DB and create YAML files
   if yaml_flag == 4:
-      #keep track of loop iteration
       i = i + 1
       continue
   else:
       extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
       dict_list = [extrinsics, intrinsics, metadata, local_origin]
       
-      #create YAML files
       DBdict2yaml(dict_list, descriptor_dict, yaml_filepath, file_names)
       i = i + 1
 
@@ -448,15 +447,12 @@ global_year_list = []
 for camera in cameras:
     camera.year_list = file_system.glob(camera.filepath + '/')
     for year in camera.year_list:
-        #remove extra stuff from filepath to get formatted day
+        #remove extra stuff from filepath to get year
         year = year.split('/')[-1]
         if year not in global_year_list:
             global_year_list.append(year)
 
 for year in global_year_list:
-    #unix times and rectified images collected for year
-    #rectified_image_list = []
-    #unix_time_list = []
     print('\n', year)
     #year_cam_list keeps track of which cameras have files for that year.
     year_cam_list = []
@@ -469,7 +465,6 @@ for year in global_year_list:
         else:
             year_cam_list.append(camera)
             camera.no_year_flag = 0
-        #print(f'camera: {camera.camera_number}, flag: {camera.no_year_flag}')
             
     #have to loop through each day in each year
     for camera in year_cam_list:
@@ -482,7 +477,6 @@ for year in global_year_list:
                 day = day.split('/')[-1]
                 if day not in global_day_list:
                     global_day_list.append(day)
-        #print (camera.camera_number, '\n', global_day_list)
           
     for day in global_day_list:
         rectified_image_list = []
@@ -491,7 +485,6 @@ for year in global_year_list:
         #day_cam_list keeps track of which cameras have files for that day.
         day_cam_list = []
         for cam in cameras:
-            #skip if camera doesn't have imagery for this year4.
             if cam.no_year_flag == 1:
                 continue
             else:
@@ -526,7 +519,7 @@ for year in global_year_list:
                 #instrinsics, extrinsics only for cameras who have file for corresponding unix time
                 temp_intrinsics = []
                 temp_extrinsics = []
-                #variable to keep track of which camera the loop is currently on
+
                 c = 0
                 for cam in cameras:
                     if cam.no_year_flag == 1:
@@ -538,6 +531,8 @@ for year in global_year_list:
                             temp_intrinsics.append(intrinsics_list[c])
                             temp_extrinsics.append(extrinsics_list[c])
                             c = c + 1
+                            
+                        #KeyError when entry doesn't exist in camera
                         except KeyError:
                             c = c + 1
                             continue 
