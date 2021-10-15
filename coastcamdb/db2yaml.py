@@ -4,11 +4,12 @@ Purpose: Access the coastcamdb on AWS. Grab data from the DB and create YAML fil
 instrinsics, metadata, and the local grid info
 
 Description:
-First connect to the MySQL database using the mysql.connector.connect() method. Query the DB to get
+First connect to the MySQL database using the connect2DB() function. Query the DB to get
 the number of cameras for a given station. Then, get a dictionary of descriptors for all the fields in the
 DB using the getDBdescriptors() function. For each camera at the given station, get the extrinsics, intrinsics,
-metadata, and local grid info dictionaries using the DBtoDict() function. Finally, write these dictionaries to
-YAML files using DBdict2yaml(). Each of these YAML files also have commented text descriptions for each of the fields.
+metadata, and local grid info dictionaries using the DBtoDict() function. Search the working directory if these
+files don't already exist, Finally, write these dictionaries to YAML files using DBdict2yaml().
+Each of these YAML files also have commented text descriptions for each of the fields.
 '''
 
 ##### REQUIRED PACKAGES ######
@@ -18,6 +19,7 @@ import mysql.connector
 import csv
 import yaml
 import datetime
+import os
 
 #must have coastcam_funcs.py in the workiung directory
 from coastcam_funcs import *
@@ -165,21 +167,35 @@ def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
         i = i + 1
     return
 
+def connect2DB(csv_filepath = os.getcwd()):
+    '''
+    Connects to the CoastCam MySQL database on S3 using a set of parameters obatined by parsing a csv file.
+    Returns a connection object representing the connecttion to the DB.
+    Inputs:
+        csv_filepath (string) - filepath where the csv filepath resides. It will default to the current working directory.
+    Outputs:
+        connection (mysql.connector conenction object) - object that represents connection to MySQL database.
+    '''
+    csv_parameters = parseCSV(csv_filepath)
+
+    host = csv_parameters[0]
+    port = int(csv_parameters[1])
+    dbname = csv_parameters[2]
+    user = csv_parameters[3]
+    password = csv_parameters[4]
+
+    connection = mysql.connector.connect(user=user, password=password, host=host,database=dbname)    
+    return connection
+    
+
 
 ##### MAIN #####
 print("start:", datetime.datetime.now())
+
 csv_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-csv_parameters = parseCSV(csv_filepath)
+connection = connect2DB(csv_filepath)
 
-host = csv_parameters[0]
-port = int(csv_parameters[1])
-dbname = csv_parameters[2]
-user = csv_parameters[3]
-password = csv_parameters[4]
-
-connection = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
-
-filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb"
+yaml_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb"
 
 station = "CACO-01"
 #get items back in order they were queried using buffered=True. Results of query stored in cursor object
@@ -189,18 +205,35 @@ cursor.execute(query)
 
 descriptor_dict = getDBdescriptors(connection)
 
+yaml_list = []
+
+#start iterator at 1 because cameras start at c1
+i = 1
 for row in cursor:
   camera_number = row[0]
-  extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
-  dict_list = [extrinsics, intrinsics, metadata, local_origin]
   
-  #Ex. file names: "CACO-01_C1_extr", "CACO-01_C1_intr", "CACO-01_C1_metadata", "CACO-01_localOrigin"
   file_names = [station+"_"+camera_number+"_extr", 
                 station+"_"+camera_number+"_intr",
                 station+"_"+camera_number+"_metadata",
-                station+"_localOrigin"] 
+                station+"_localOrigin"]
+  yaml_list.append(file_names)
   
-  #create YAML files using asynchronous parallel processing
-  DBdict2yaml(dict_list, descriptor_dict, filepath, file_names)
+  #flag used to determine if it's necessary to access DB and create YAML files
+  yaml_flag = 0
 
+  for file in file_names:
+      if os.path.isfile(yaml_filepath + file + '.yaml'):
+          yaml_flag = yaml_flag + 1
+
+  #if 4 YAML files exist for station camera, don't need to access DB and create YAML files
+  if yaml_flag == 4:
+      i = i + 1
+      continue
+  else:
+      extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
+      dict_list = [extrinsics, intrinsics, metadata, local_origin]
+      
+      DBdict2yaml(dict_list, descriptor_dict, yaml_filepath, file_names)
+      i = i + 1
+      
 print("end:", datetime.datetime.now())

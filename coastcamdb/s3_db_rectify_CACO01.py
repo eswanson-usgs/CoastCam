@@ -4,14 +4,11 @@ Purpose: Access a pair of images on S3. Access the coastcamdb on AWS and get met
 Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on a folder
 of images in S3. A folder in this case would refere to a DAY of imagery
 
-Description: ######################UPDATE FOR WHOLE STATION###############+
+Description:
 Using the filepath url of an S3 folder, the station is obtained. For example, CACO-01. A csv file with the parameters
 for logging into the coastcamdb on AWS is parsed using parseCSV() and the resulting parsed parameters are used to connect to the DB.
 The DB is queried and the number of cameras for the station is obtained. In this script, the cmaeras are represented as
-Camera objects stored in a list. The descriptors for the data fields in the DB are
-also fetched using getDBdescriptors(). For each camera at the station, the script checks if yaml files for camera extrinsics,
-intrinsics, metadata, and local origin exist. If not, the script fetches the data from the DB using DBtoDict() and creates
-dictionary objects. Then, it creates yaml files using DBdict2yaml(). Three lists are created that contain extrinsics, intrinsics,
+Camera objects stored in a list. Three lists are created that contain extrinsics, intrinsics,
 and metadata, respectively. These lists contain dictionary objects corresponding to the YAML files for each camera. After this, a CameraCalibration object and TargetGrid object are created.
 For the defined year in the S3 filepath, a global list of day directories in the year directory is obtained. For each year
 of imagery at the station, a listis created to hold the cameras that have imagery for that year. If a camera
@@ -69,33 +66,7 @@ from calibration_crs import *
 from rectifier_crs import *
 
 
-##### FUNCTIONS ######
-def parseCSV(filepath):
-    '''
-    Read and parse a CSV to obtain list of parameters used to access database.
-    The csv file should have the column headers "host", "port", "dbname", "user",
-    and "password" with one row of data containing the user's values
-    Inputs:
-        filepath (string) - filepath of the csv
-    Outputs:
-        db_list (list) - list of paramters used to access database
-    '''
-    
-    db_list = []
-
-    with  open(filepath, 'r') as csv_file:
-        csvreader = csv.reader(csv_file)
-
-        #extract data from csv. Have to use i to track row because iterator object csvreader is not subscriptable
-        i = 0
-        for row in csvreader:
-            #i = 0 is column headers. i = 1 is data 
-            if i == 1:
-                db_list = row
-            i = i + 1
-                
-    return db_list   
-    
+##### FUNCTIONS ######    
 def DBtoDict(connection, station, camera_number):
     '''
     Read from the database connection and create 4 dictionaries: one for camera extrinsics, one for 
@@ -163,56 +134,6 @@ def DBtoDict(connection, station, camera_number):
     
     return extrinsics, intrinsics, metadata, local_origin
 
-def getDBdescriptors(connection):
-    '''
-    Retrieve the entries from the "descriptors" table in the coastcamdb.
-    Return the entries as a dictionary. These descriptors are text fields that describe the 
-    meaning of the field names in the coastcamdb.
-    Inputs:
-        connection (mysql.connector.connection_cext.CMySQLConnection) - Object that acts as the connection to MySQL
-    Output:
-        descriptor_dict (dict) - dictionary of descriptor values
-    '''
-    
-    query = "SELECT * FROM descriptors"
-    #results are stored as dictionary iun cursor object
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(query)
-    
-    #each row in cursor is a dictionary. Only get one row, which. This is descriptor dict
-    for row in cursor:
-        descriptor_dict = row
-    return descriptor_dict
-
-def DBdict2yaml(dict_list, descriptor_dict, filepath, file_names):
-    '''
-    Create YAML files from a list of dictionaries. Create a YAML file for each
-    dictionary in the list.
-    Inputs:
-        dict_list (list) - a list of dictionary objects
-        descriptor_dict (dict) - dictionary of descriptors for fields from the DB
-        filepath (string) - directory where YAML files will be saved
-        file_names (list) - list of filenames for the new YAML files, ".yml" not included
-    Outputs:
-        none, but YAML files are created
-    '''
-
-    i = 0
-    for dictionary in dict_list:
-        path = filepath+"/"+file_names[i]+".yaml"
-        
-        with open(path, 'w') as file:
-            for field in dictionary:
-                #manually write in YAML formatting. YAML dump sometimes writes out of order
-                file.write(field + ': ' + str(dictionary[field]) + '\n')
-            
-            #leave comments in yaml with text descriptions of the fields
-            #ex. #x - x location of camera
-            for field in dictionary:
-                file.write('#' + field + ' - ' + descriptor_dict[field]+ '\n')
-        i = i + 1
-    return
-
 def getFilename(filepath):
     '''
     Given a filepath, retrieve the filename at the end of it.
@@ -253,17 +174,6 @@ def mergeImages(metadata, image_files, intrinsics, extrinsics, local_origin):
     '''
     rectified_image = rectifier.rectify_images(metadata, image_files, intrinsics, extrinsics, local_origin, fs=file_system)
     return rectified_image
-
-def singleCamRectify():
-    '''
-    whole rectification if only one cam for given day
-    '''
-
-def multiCamRectify():
-    '''
-    whole rectification if multiple cameras for a given day
-    '''
-
 
 ##### CLASSES #####
 class Camera:
@@ -318,78 +228,57 @@ class Camera:
 
 ##### MAIN #####
 print("start:", datetime.datetime.now())
-            
+
 global file_system
 file_system = fsspec.filesystem('s3', profile='coastcam')
         
 #S3 filepath for station. Station hardwired to CACO-01 for now.
 station_filepath = "s3://test-cmgp-bucket/cameras/caco-01/"
-
 station_path_elements = station_filepath.split("/")
 
 #remove empty space elements from the list
 for elements in station_path_elements:
     if len(elements) == 0: 
         station_path_elements.remove(elements)
-
+        
 station = station_path_elements[3]
 
-csv_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-csv_parameters = parseCSV(csv_filepath)
+#each folder in directory is dictionary object. 'Key' key in the dict is the subfolder filepath
+station_directory = file_system.listdir(station_filepath)
+camera_list = []
+for item in station_directory:
+    subfolder = (item['Key'].split('/')[-1])
+    #camera folder will always be "c*" where * is the camera number. Only want camera folders beside cx
+    if len(subfolder) == 2 and subfolder != 'cx':
+        camera_list.append(subfolder)
 
-host = csv_parameters[0]
-port = int(csv_parameters[1])
-dbname = csv_parameters[2]
-user = csv_parameters[3]
-password = csv_parameters[4]
-
-connection = mysql.connector.connect(user=user, password=password, host=host,database=dbname)
-
-yaml_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb/"
-
-station = "CACO-01"
-#get items back in order they were queried using buffered=True. Results of query stored in cursor object
-cursor = connection.cursor(buffered=True)
-query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
-cursor.execute(query)
-
-descriptor_dict = getDBdescriptors(connection)
+##yaml_filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/GitHub/CoastCam/coastcamdb/"
+##
+##station = "CACO-01"
+###get items back in order they were queried using buffered=True. Results of query stored in cursor object
+##cursor = connection.cursor(buffered=True)
+##query = "SELECT camera_number FROM camera WHERE name="+"'"+station+"'"
+##cursor.execute(query)
+##
+##yaml_list = []
+##
+##
 
 yaml_list = []
-
 cameras = []
 
 #start iterator at 1 because cameras start at c1
 i = 1
-for row in cursor:
-  camera_number = row[0]
+for cam in camera_list:
   #ex. filepath: s3://test-cmgp-bucket/cameras/caco-01/c1/
-  camera_filepath = station_filepath + 'c'+ str(i)
-  cameras.append(Camera(camera_number, camera_filepath))
+  camera_filepath = station_filepath + cam
+  cameras.append(Camera(cam.upper(), camera_filepath))
   
-  file_names = [station+"_"+camera_number+"_extr", 
-                station+"_"+camera_number+"_intr",
-                station+"_"+camera_number+"_metadata",
+  file_names = [station+"_"+cam.upper()+"_extr", 
+                station+"_"+cam.upper()+"_intr",
+                station+"_"+cam.upper()+"_metadata",
                 station+"_localOrigin"]
   yaml_list.append(file_names)
-  
-  #flag used to determine if it's necessary to access DB and create YAML files
-  yaml_flag = 0
-
-  for file in file_names:
-      if os.path.isfile(yaml_filepath + file + '.yaml'):
-          yaml_flag = yaml_flag + 1
-
-  #if 4 YAML files exist for station camera, don't need to access DB and create YAML files
-  if yaml_flag == 4:
-      i = i + 1
-      continue
-  else:
-      extrinsics, intrinsics, metadata, local_origin = DBtoDict(connection, station, camera_number) 
-      dict_list = [extrinsics, intrinsics, metadata, local_origin]
-      
-      DBdict2yaml(dict_list, descriptor_dict, yaml_filepath, file_names)
-      i = i + 1
 
 # These are the USGS image filename format.
 extrinsic_cal_files = []
@@ -441,6 +330,7 @@ rectifier_grid = TargetGrid(
 rectifier = Rectifier(
     rectifier_grid
 )
+
 
 #create global list of years that have imagery in S3 based on list of years from  each camera
 global_year_list = []
