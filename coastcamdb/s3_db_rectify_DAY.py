@@ -409,7 +409,7 @@ else:
     
 #Day, year set manually for testing
 year = "/2019"
-day = "/347_Dec.13"
+day = "/test"
 
 #dictionary contains lists of image files used for rectification . The key is the unix time, the data is the list of image files
 #from each camera
