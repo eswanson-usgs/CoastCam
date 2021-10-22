@@ -213,8 +213,9 @@ class Camera:
 ##### MAIN #####
 print("start:", datetime.datetime.now())
 
-global file_system
 file_system = fsspec.filesystem('s3', profile='coastcam')
+
+cameras = []
         
 #S3 filepath for station. Station hardwired to CACO-01 for now.
 station_filepath = "s3://test-cmgp-bucket/cameras/caco-01/"
@@ -237,7 +238,6 @@ for item in station_directory:
         camera_list.append(subfolder)
 
 yaml_list = []
-cameras = []
 
 #start iterator at 1 because cameras start at c1
 i = 1
@@ -264,7 +264,10 @@ for lists in yaml_list:
 # dict providing origin and orientation of the local grid
 local_origin = yaml2dict(file_names[3]+'.yaml')
 # Dict providing the metadata that the Axiom code infers from the USACE filename format
+
 metadata_list = []
+intrinsics_list = []
+extrinsics_list = []
 for file in metadata_files:
     metadata_list.append(yaml2dict(file))
 extrinsics_list = []
@@ -298,6 +301,7 @@ rectifier_grid = TargetGrid(
     dy,
     z
 )
+
 
 rectifier = Rectifier(
     rectifier_grid
