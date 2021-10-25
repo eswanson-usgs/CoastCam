@@ -1,8 +1,8 @@
 '''
 Eric Swanson
-Purpose: Access a pair of images on S3. Access the coastcamdb on AWS and get metadata. Rectify the images using code from
-Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on a folder
-of images in S3. A folder in this case would refere to a DAY of imagery
+Purpose: Access a set of images on S3. Access the coastcamdb on AWS and get metadata. Rectify the images using code from
+Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on a year's
+worth of imagery stored in S3.
 
 Description:
 Using the filepath url of an S3 folder, the station is obtained. For example, CACO-01. A csv file with the parameters
