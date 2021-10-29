@@ -390,7 +390,6 @@ for year in global_year_list:
                 for cam in cameras:
                     if cam.no_year_flag == 1:
                         c = c + 1
-                        continue
                     else:
                         try:
                             #variable used to test if the camera has an entry at the given unix time
@@ -402,7 +401,6 @@ for year in global_year_list:
                         #KeyError when entry doesn't exist in camera
                         except KeyError:
                             c = c + 1
-                            continue 
                 rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], temp_intrinsics, temp_extrinsics, local_origin, fs=file_system)
                 rectified_image_list.append(rectified_image)        
             else:

@@ -261,14 +261,13 @@ def mergeDay(args):
             c = 0
             for cam in cameras:
                 if cam.no_year_flag == 1:
-                    continue
+                    c = c + 1
                 elif cam.camera_number not in has_time_dict[unix_time]:
                     c = c + 1
                 else:
                     temp_intrinsics.append(intrinsics_list[c])
                     temp_extrinsics.append(extrinsics_list[c])
                     c = c + 1
-                    continue 
             rectified_image = rectifier.rectify_images(metadata_list[0], image_files_dict[unix_time], temp_intrinsics, temp_extrinsics, local_origin, fs=file_system)
             rectified_image_list.append(rectified_image)        
         else:
