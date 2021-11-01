@@ -1,23 +1,36 @@
 '''
 Eric Swanson
-Purpose: Access a pair of images on S3. Access the coastcamdb on AWS and get metadata. Rectify the images using code from
-Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on a
-'granularity' specfiied by the user. The user inputs a filepath and the script will determine whether to rectify imagery
-for a single unix time, day, year, or entire station in S3.
+Purpose:  Rectify the images using code from Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3.
+This script is designed to work on a 'scope' specfiied by the user. The user inputs a filepath and the script will determine
+whether to rectify imagery for a single unix time, day, year, or entire station in S3.
 
-Description: ######EDIT FOR USER INPUT#######
-Using a manually set S3 filepath, the directory that has the imagery that will be rectified is obtained. That directory is searched for subfolders. Only subfolders with the format "c1", "c2", etc. will be
-Three lists are created that contain extrinsics, intrinsics,
-added to a list of cameras. A camera object will be created for each camera. 
-and metadata, respectively. These lists contain dictionary objects corresponding to the YAML files for each camera. After this, a CameraCalibration object and TargetGrid object are created.
-For the defined year in the S3 filepath, a global list of day directories in the year directory is obtained. For each year
-of imagery at the station, a listis created to hold the cameras that have imagery for that year. If a camera
-doesn't have imagery for the year, a flag attribute is set to True to reflect that. For each year, A global day list is created
-that contains every day in the year that contains imagery (whether it's from one or multiple cameras). Using this list, rectification
-is performed on all the images for each day in S3. Each day is mapped using a concurrent.futures ThreadPoolExecutor to parallelize the
-code and make it run faster. The process for rectifying a day of imagery is as follows:
+Description: 
+This script is run through the command prompt. The user enters an S3 filepath as a command line argument. An example way to run this
+script on Windows command prompt is:
+py S3_RECTIFY.py s3://test-cmgp-bucket/cameras/caco-01/
 
-For each camera, an S3 filepath for a list of all the "raw" images for the camera's corresponding S3 filepath is obtained. A dictionary. has_time_dict,
+The filepath is obatined from the command line as a variable and split up into elements consisting of the filepath subfolders
+or image filename. Using these elements, the filepath is checked to see if it's a proper length. If it it's too long or too short,
+the user will be asked to input a filepath until one of proper length is entertained. If the filepath contains a filename at the
+end, the script will make sure it is in a .jpg format-- the user will be asked to re-enter the filepath if not. A list of cameras
+for the camera station directory that the filepath exists under will be obtained, represented as Pyton objects.
+For each camera, a set of YAML files for the camera (intrinsics, extrinsics, metadata, and local origin info) will be read
+and stored as dcitionary objects. These dictionaries are stored in lists (one each for intrinsics, extrinsics, and metadata),
+except for the local origin info.
+
+Depending on the length of the filepath, a 'scope' for the amount imagery to be rectified will be defined. The possible scopes are
+unix time, day, year, and station. Basically, the longer the filepath, the smaller the scope and the less amount imagery that
+will be rectified. For the scope to be 'unix time', the user must input a filepath that ends with a filename. This is because the
+unix time is contained in the filename.
+
+If the scope is for a single unix time: the station, year, and day are obtained from the filepath. For each camera, the given day
+is searched for the given unix time. The script keeps track of which cameras have imagery for that time. Only timex images
+are used. If the number of cameras with imagery for that time is less than the total number of cameras for that station,
+only the intrinsics and extrinsics for the cameras that have imagery will be used. Otherwise, every extrinsic and intrisinsic
+dictionary is used. Using the extrinsics, instrinsics, metadata, and local origin info, a 'merged' image is created. This image
+is copied to the appropriate 'merge' directory in S3.
+
+If the scope is for a day: for each camera, an S3 filepath for a list of all the "raw" images for the camera's corresponding S3 filepath is obtained. A dictionary. has_time_dict,
 is created to keep track of which cameras have imagery for each unix time. They key values are unix times and the data values
 are lists of camera numbers. Each list of imagery is stripped of all images except
 timex images using the onlyTimex() function. Using the createUnixDict() function, a dictionary is created.
@@ -32,7 +45,16 @@ where at least image file exists, a rectified "merge" image is created using the
 If there is a unix time that does not have a image from each camera, then a rectified image is created using the files from the other camera(s)
 that do exist for the that unix time. Each rectified image is added to a list of rectified images, and each unix timen that has
 at least one image file is also stored in a list (as a string). Each rectified image is copied to a new S3 filepath.
-Finally, this image is written to a new "rectified" filepath in S3.
+Finally, this image is written to a new "rectified" filepath in S3. This is done through the mergeDay() function.
+
+If the scope is for a year: each camera at the station is checked to see if contains imagery for that year. If not, a flag is set
+to denote that the camera has no imagery. A global list of day directories in the year directory is obtained. For each day,
+a list of cameras is created. Only cameras that have imagery (in S3) for that day are added to the list. Using this list,
+rectification is performed on all the images for that day using the mergeDay() function. Multithreading parallelization is used
+to speed up the rectification and copying process.
+
+If the scope is for the entire station: a list of years in the station directory is created. For every year in this list, imagery
+is rectified following the steps listed above for the scope for a year.
 
 The old filepath for unrectified images is in the format :
 s3://[S3 bucket]/cameras/[station]/[camera]/[year]/[day]/raw/[image file name]
@@ -490,6 +512,8 @@ elif len(path_elements) == 9:
 print('scope:', scope)
 
 
+
+#UNIX TIME
 if scope == 'unix time':
     year = path_elements[5]
     day = path_elements[6]
@@ -529,7 +553,9 @@ if scope == 'unix time':
     with file_system.open(rectified_filepath, 'wb') as rectified_file:
         imageio.imwrite(rectified_file,np.flip(rectified_image,0),format='jpg') 
 
-          
+
+
+#DAY          
 elif scope == 'day':
     year = path_elements[5]
     day = path_elements[6]
@@ -547,52 +573,83 @@ elif scope == 'day':
     args = (year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras)
     mergeDay(args)
 
+
+
+#YEAR
+elif scope == 'year':
+    year = path_elements[5]
+
+    #year_cam_list keeps track of which cameras have files for that year.
+    year_cam_list = []
+    for camera in cameras:
+        year_path = camera.filepath + '/' + year
+        if not file_system.exists(year_path):
+            print(camera.camera_number + " does not have year: " + year)
+            #for camera, keep track if it has the current year. Used below to skip processing for S3 day folders
+            camera.no_year_flag = 1 
+        else:
+            year_cam_list.append(camera)
+            camera.no_year_flag = 0
+            
+    for camera in year_cam_list:
+        #create global list of days that have imagery in S3 based on list of days from each camera
+        global_day_list = []
+        for camera in cameras:
+            camera.day_list = file_system.glob(camera.filepath + '/' + year + '/')
+            for day in camera.day_list:
+                #remove extra stuff from filepath to get formatted day
+                day = day.split('/')[-1]
+                if day not in global_day_list:
+                    global_day_list.append(day)
+
+    print(global_day_list)
     
-    
-##
-##
-###create global list of years that have imagery in S3 based on list of years from  each camera
-##global_year_list = []
-##for camera in cameras:
-##    camera.year_list = file_system.glob(camera.filepath + '/')
-##    for year in camera.year_list:
-##        #remove extra stuff from filepath to get year
-##        year = year.split('/')[-1]
-##        if year not in global_year_list:
-##            global_year_list.append(year)
-##
-##
-##for year in global_year_list:
-##    print('\n', year)
-##    #year_cam_list keeps track of which cameras have files for that year.
-##    year_cam_list = []
-##    for camera in cameras:
-##        full_year_path = "test-cmgp-bucket/cameras/caco-01/" + camera.camera_number.lower() + '/' + year
-##        if full_year_path not in camera.year_list:
-##            print(camera.camera_number + " does not have year: " + year)
-##            #for camera, keep track if it has the current year. Used below to skip processing for S3 day folders
-##            camera.no_year_flag = 1 
-##        else:
-##            year_cam_list.append(camera)
-##            camera.no_year_flag = 0
-##            
-##    #have to loop through each day in each year
-##    for camera in year_cam_list:
-##        #create global list of days that have imagery in S3 based on list of days from each camera
-##        global_day_list = []
-##        for cam in cameras:
-##            cam.day_list = file_system.glob(cam.filepath + '/' + year + '/')
-##            for day in cam.day_list:
-##                #remove extra stuff from filepath to get formatted day
-##                day = day.split('/')[-1]
-##                if day not in global_day_list:
-##                    global_day_list.append(day)
-##
-##
-##
-##    #ProcessPoolExecutor is used for multithreading (allows multiple instances of function to be run at once)
-##    args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras) for day in global_day_list)
-##    with concurrent.futures.ThreadPoolExecutor() as executor:
-##        results = executor.map(mergeDay, args)
-##
-##print("end:", datetime.datetime.now())
+    #ProcessPoolExecutor is used for multithreading (allows multiple instances of function to be run at once)
+    args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras) for day in global_day_list)
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = executor.map(mergeDay, args)    
+
+
+
+#STATION    
+else: #scope == 'station'
+    #create global list of years that have imagery in S3 based on list of years from  each camera
+    global_year_list = []
+    for camera in cameras:
+        camera.year_list = file_system.glob(camera.filepath + '/')
+        for year in camera.year_list:
+            #remove extra stuff from filepath to get year
+            year = year.split('/')[-1]
+            if year not in global_year_list:
+                global_year_list.append(year)
+
+    for year in global_year_list:
+        print('\n', year)
+        #year_cam_list keeps track of which cameras have files for that year.
+        year_cam_list = []
+        for camera in cameras:
+            full_year_path = "test-cmgp-bucket/cameras/caco-01/" + camera.camera_number.lower() + '/' + year
+            if full_year_path not in camera.year_list:
+                print(camera.camera_number + " does not have year: " + year)
+                #for camera, keep track if it has the current year. Used below to skip processing for S3 day folders
+                camera.no_year_flag = 1 
+            else:
+                year_cam_list.append(camera)
+                camera.no_year_flag = 0
+                
+        global_day_list = []
+        for camera in year_cam_list:      
+            camera.day_list = file_system.glob(camera.filepath + '/' + year + '/')
+            for day in camera.day_list:
+                #remove extra stuff from filepath to get formatted day
+                day = day.split('/')[-1]
+                if day not in global_day_list:
+                    global_day_list.append(day)
+
+        #ProcessPoolExecutor is used for multithreading (allows multiple instances of function to be run at once)
+        args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras) for day in global_day_list)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            results = executor.map(mergeDay, args)
+
+
+print("end:", datetime.datetime.now())

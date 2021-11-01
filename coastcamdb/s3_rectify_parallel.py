@@ -1,7 +1,6 @@
 '''
 Eric Swanson
-Purpose: Access a pair of images on S3. Access the coastcamdb on AWS and get metadata. Rectify the images using code from
-Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on multiple
+Purpose: Rectify images on S3 using code from Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3. This script is designed to work on multiple
 year's of imagery for the CACO-01 station. Parallelization (multithreading) is used to speed up the execution time.
 
 Description:
@@ -462,17 +461,15 @@ for year in global_year_list:
             year_cam_list.append(camera)
             camera.no_year_flag = 0
             
-    #have to loop through each day in each year
+    #create global list of days that have imagery in S3 based on list of days from each camera
+    global_day_list = []
     for camera in year_cam_list:
-        #create global list of days that have imagery in S3 based on list of days from each camera
-        global_day_list = []
-        for cam in cameras:
-            cam.day_list = file_system.glob(cam.filepath + '/' + year + '/')
-            for day in cam.day_list:
-                #remove extra stuff from filepath to get formatted day
-                day = day.split('/')[-1]
-                if day not in global_day_list:
-                    global_day_list.append(day)
+        camera.day_list = file_system.glob(camera.filepath + '/' + year + '/')
+        for day in camera.day_list:
+            #remove extra stuff from filepath to get formatted day
+            day = day.split('/')[-1]
+            if day not in global_day_list:
+                global_day_list.append(day)
 
 
 
