@@ -262,7 +262,7 @@ def mergeDay(args):
     Rectifies a day of imagery in S3 and uploads the rectified image to a year subfolder in a 'merge' directory in S3
     Inputs:
         args (tuple) - arguments tuple with elements: year, day, file_system, metadata_list, intrinsics_list, extrinsics_list,
-        local_origin, cameras
+        local_origin, cameras, station_filepath
     Outputs:
         None
     '''
@@ -273,7 +273,8 @@ def mergeDay(args):
     intrinsics_list = args[4]
     extrinsics_list = args[5]
     local_origin = args[6]
-    cameras = args[7]  
+    cameras = args[7]
+    station_filepath = args[8]
 
     #day_cam_list keeps track of which cameras have files for that day.
     day_cam_list = []
@@ -281,7 +282,7 @@ def mergeDay(args):
         if cam.no_year_flag == 1:
             continue
         else:
-            full_day_path = "test-cmgp-bucket/cameras/caco-01/" + cam.camera_number.lower() + '/' + year + '/' + day
+            full_day_path = station_filepath + cam.camera_number.lower() + '/' + year + '/' + day
             if full_day_path not in cam.day_list:
                 print(cam.camera_number + " does not have day: " + day)
             else:
@@ -423,6 +424,8 @@ station = path_elements[3]
 #each folder in directory is dictionary object. 'Key' key in the dict is the subfolder filepath
 split_path = filepath.split(station)
 station_filepath = split_path[0] + station + '/'
+#"s3://" is not retrieved from filesystem when using the fsspec glob() function, which causes issues
+station_filepath = station_filepath.replace("s3://", '')
 directory = file_system.listdir(station_filepath)
 
 camera_list = []
@@ -522,21 +525,21 @@ if scope == 'unix time':
     #keep track of which cameras have imagery for the given unix time
     image_files_list = []
     time_cam_list = []
-    for cam in cameras:
-        image_filepath = cam.filepath + '/' + year + '/' + day + '/raw/' + unix_time + '.' + cam.camera_number.lower() + '.timex.jpg'
+    for camera in cameras:
+        image_filepath = camera.filepath + '/' + year + '/' + day + '/raw/' + unix_time + '.' + camera.camera_number.lower() + '.timex.jpg'
         if not file_system.exists(image_filepath):
             print(f'{cam.camera_number} does not have an image at time {unix_time}')
         else:
             image_files_list.append(image_filepath)
-            time_cam_list.append(cam.camera_number)
+            time_cam_list.append(camera.camera_number)
 
     if len(time_cam_list) != len(cameras):
         temp_intrinsics = []
         temp_extrinsics = []
 
         c = 0
-        for cam in cameras:
-            if cam.camera_number not in time_cam_list:
+        for camera in cameras:
+            if camera.camera_number not in time_cam_list:
                 c = c + 1
             else:
                 temp_intrinsics.append(intrinsics_list[c])
@@ -550,6 +553,7 @@ if scope == 'unix time':
     imageio.imwrite('./rectified images/' + ofile,np.flip(rectified_image,0),format='jpg')
 
     rectified_filepath = station_filepath + 'cx/merge' + '/' + year + '/' + day + '/' + ofile
+    print(rectified_filepath)
     with file_system.open(rectified_filepath, 'wb') as rectified_file:
         imageio.imwrite(rectified_file,np.flip(rectified_image,0),format='jpg') 
 
@@ -570,7 +574,7 @@ elif scope == 'day':
         else:
             camera.no_year_flag = 0
 
-    args = (year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras)
+    args = (year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras, station_filepath)
     mergeDay(args)
 
 
@@ -601,11 +605,9 @@ elif scope == 'year':
                 day = day.split('/')[-1]
                 if day not in global_day_list:
                     global_day_list.append(day)
-
-    print(global_day_list)
     
     #ProcessPoolExecutor is used for multithreading (allows multiple instances of function to be run at once)
-    args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras) for day in global_day_list)
+    args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras, station_filepath) for day in global_day_list)
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(mergeDay, args)    
 
@@ -628,26 +630,28 @@ else: #scope == 'station'
         #year_cam_list keeps track of which cameras have files for that year.
         year_cam_list = []
         for camera in cameras:
-            full_year_path = "test-cmgp-bucket/cameras/caco-01/" + camera.camera_number.lower() + '/' + year
-            if full_year_path not in camera.year_list:
+            year_path = camera.filepath + '/' + year
+            if year_path not in camera.year_list:
                 print(camera.camera_number + " does not have year: " + year)
                 #for camera, keep track if it has the current year. Used below to skip processing for S3 day folders
                 camera.no_year_flag = 1 
             else:
                 year_cam_list.append(camera)
                 camera.no_year_flag = 0
+
+        for camera in cameras:
+            camera.day_list = file_system.glob(camera.filepath + '/' + year + '/')
                 
         global_day_list = []
         for camera in year_cam_list:      
-            camera.day_list = file_system.glob(camera.filepath + '/' + year + '/')
             for day in camera.day_list:
                 #remove extra stuff from filepath to get formatted day
                 day = day.split('/')[-1]
                 if day not in global_day_list:
                     global_day_list.append(day)
-
+        
         #ProcessPoolExecutor is used for multithreading (allows multiple instances of function to be run at once)
-        args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras) for day in global_day_list)
+        args = ((year, day, file_system, metadata_list, intrinsics_list, extrinsics_list, local_origin, cameras, station_filepath) for day in global_day_list)
         with concurrent.futures.ThreadPoolExecutor() as executor:
             results = executor.map(mergeDay, args)
 
