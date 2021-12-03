@@ -21,10 +21,11 @@ The filename is 1576260000.c2.snap.jpg
 """
 
 ##### REQUIRED PACKAGES #####
+import json
+import urllib.parse
 import os
 import time
-#will need fs3 package to use s3 in fsspec
-import fsspec 
+import boto3
 import imageio
 import calendar
 import datetime
@@ -137,10 +138,95 @@ def copy_s3_image(source_filepath):
     #if not image, return blank string. Will be used to determine if file copy needs to be logged in csv
     else:
         return 'Not an image. Not copied.'
+
+def get_new_key(old_key):
+    '''
+    Get the new key (filepath) for an image in S3. The old key will have the format
+    cameras/[station]/products/[long filename]. The new key will have the format
+    cameras/[station]/[camera]/[year]/[day]/raw/[filename]
+    day is in the format day is the format ddd_mmm.nn. ddd is 3-digit number describing day in the year.
+    mmm is 3 letter abbreviation of month. nn is 2 digit number of day of month.
+    filenames are in the format [unix datetime].[camera in format c#].[file format].[image format]
+    New filepath is created and returned as a string by this function.
+    Input:
+        old_key - (string) current filepath of image where the image will be copied from.
+    Output:
+        new_key - (string) new filepath image is copied to.
+    '''
+
+    old_path_elements = old_key.split("/")
+
+    station = old_path_elements[1]
+    filename = old_path_elements[3]
+
+    filename_elements = filename.split(".")
+
+    #check to see if filename is properly formatted
+    if len(filename_elements) != 4:
+        return 'Not properly formatted. Not copied.'
+    else:
+        image_unix_time = filename_elements[0]
+        image_camera = filename_elements[1] 
+        image_type = filename_elements[2]
+        image_file_type = filename_elements[3]
+
+        #convert unix time to date-time str in the format "yyyy-mm-dd HH:MM:SS"
+        image_date_time, date_time_obj = unix2datetime(image_unix_time) 
+        year = image_date_time[0:4]
+        month = image_date_time[5:7]
+        day = image_date_time[8:10]
+        
+        #day format for new filepath will have to be in format ddd_mmm.nn
+        #timetuple() method returns tuple with several date and time attributes. tm_yday is the (attribute) day of the year
+        day_of_year = str(datetime.date(int(year), int(month), int(day)).timetuple().tm_yday)
+
+        #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
+        month_word = calendar.month_name[int(month)]
+        #month in the mmm word form
+        month_formatted = month_word[0:3] 
+
+        new_format_day = day_of_year + "_" + month_formatted + "." + day
+        
+        new_key = "cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" + filename
+    return new_key
                     
 ###### MAIN ######
-#old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
-source_filepath = "s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg"  
 
-dest_filepath = copy_s3_image(source_filepath)
+key = 'cameras/caco-01/products/1576260000.c2.snap.jpg'
+new_key = get_new_key(key)
+print(new_key)
+
+    
+print('Loading function')
+
+s3 = boto3.client('s3')
+
+##def lambda_handler(event, context):
+##    #print("Received event: " + json.dumps(event, indent=2))
+##
+##    # Get the object from the event and show its content type
+##    bucket = event['Records'][0]['s3']['bucket']['name']
+##    key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+##    print('object key:', key)
+##    copy_source = {
+##    'Bucket': bucket,
+##    'Key': key
+##    }
+##    try:
+##        response = s3.get_object(Bucket=bucket, Key=key)
+##        print("CONTENT TYPE: " + response['ContentType'])
+##        waiter = s3.get_waiter('object_exists')
+##        waiter.wait(Bucket=bucket, Key=key)
+##        print("copying image")
+##        s3.copy(copy_source, bucket, 'lambda_move/connectivity.jpg')
+##        return response['ContentType']
+##    except Exception as e:
+##        print(e)
+##        print('Error getting object {} from bucket {}. Make sure they exist and your bucket is in the same region as this function.'.format(key, bucket))
+##        raise e
+
+###old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
+##source_filepath = "s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg"  
+##
+##dest_filepath = copy_s3_image(source_filepath)
 
