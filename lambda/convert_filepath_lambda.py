@@ -191,42 +191,35 @@ def get_new_key(old_key):
     return new_key
                     
 ###### MAIN ######
-
-key = 'cameras/caco-01/products/1576260000.c2.snap.jpg'
-new_key = get_new_key(key)
-print(new_key)
-
+def lambda_handler(event, context):
+    '''
+    This function is executed when the Lambda function is triggered on a new image upload.
+    '''
     
-print('Loading function')
+    #print("Received event: " + json.dumps(event, indent=2))
 
-s3 = boto3.client('s3')
+    # Get the object from the event and show its content type
+    bucket = event['Records'][0]['s3']['bucket']['name']
+    key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    print('object key:',key)
+    
+    #get reformatted filepath for image
+    new_key = get_new_key(key)
+    print(new_key)
+    copy_source = {
+    'Bucket': bucket,
+    'Key': key
+    }
+    try:
+        response = s3.get_object(Bucket=bucket, Key=key)
+        print("CONTENT TYPE: " + response['ContentType'])
+        waiter = s3.get_waiter('object_exists')
+        waiter.wait(Bucket=bucket, Key=key)
+        s3.copy(copy_source, bucket, new_key)
+        return response['ContentType']
+    except Exception as e:
+        print(e)
+        print('Error getting object {} from bucket {}. Make sure they exist and your bucket is in the same region as this function.'.format(key, bucket))
+        raise e
 
-##def lambda_handler(event, context):
-##    #print("Received event: " + json.dumps(event, indent=2))
-##
-##    # Get the object from the event and show its content type
-##    bucket = event['Records'][0]['s3']['bucket']['name']
-##    key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
-##    print('object key:', key)
-##    copy_source = {
-##    'Bucket': bucket,
-##    'Key': key
-##    }
-##    try:
-##        response = s3.get_object(Bucket=bucket, Key=key)
-##        print("CONTENT TYPE: " + response['ContentType'])
-##        waiter = s3.get_waiter('object_exists')
-##        waiter.wait(Bucket=bucket, Key=key)
-##        print("copying image")
-##        s3.copy(copy_source, bucket, 'lambda_move/connectivity.jpg')
-##        return response['ContentType']
-##    except Exception as e:
-##        print(e)
-##        print('Error getting object {} from bucket {}. Make sure they exist and your bucket is in the same region as this function.'.format(key, bucket))
-##        raise e
-
-###old filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
-##source_filepath = "s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg"  
-##
-##dest_filepath = copy_s3_image(source_filepath)
 
