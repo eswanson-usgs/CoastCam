@@ -88,7 +88,7 @@ import re
 import sys
 import concurrent.futures
 
-from coastcam_funcs import *
+#from coastcam_funcs import *
 from calibration_crs import *
 from rectifier_crs import *
 
@@ -528,7 +528,7 @@ if scope == 'unix time':
     for camera in cameras:
         image_filepath = camera.filepath + '/' + year + '/' + day + '/raw/' + unix_time + '.' + camera.camera_number.lower() + '.timex.jpg'
         if not file_system.exists(image_filepath):
-            print(f'{cam.camera_number} does not have an image at time {unix_time}')
+            print(f'{camera.camera_number} does not have an image at time {unix_time}')
         else:
             image_files_list.append(image_filepath)
             time_cam_list.append(camera.camera_number)
