@@ -3,6 +3,7 @@ import datetime
 import os
 from dateutil import tz
 from skimage import io
+#import imageio
 from PIL import Image
 import json
 import matplotlib.pyplot as plt
@@ -38,10 +39,10 @@ def average_color(filepath,fs=None):
     """
     if fs:
         with fs.open(filepath,'rb') as f:
-            img = io.imread(f)
+            img = plt.imread(f)
     else:
         with open(filepath, 'rb') as f:
-            img = io.imread(f)
+            img = plt.imread(f)
             
     av = img.mean(axis=0).mean(axis=0)
     avall = av.mean(axis=0)
@@ -54,10 +55,10 @@ def detect_blur_fft(filepath, size=60, vis=False, fs=None):
     """
     if fs:
         with fs.open(filepath,'rb') as f:
-            img = io.imread(f, as_gray=True)
+            img = plt.imread(f, as_gray=True)
     else:
         with open(filepath, 'rb') as f:
-            img = io.imread(f, as_gray=True)
+            img = plt.imread(f, as_gray=True)
 
     # grab the dimensions of the image and use the dimensions to
     # derive the center (x, y)-coordinates

@@ -15,7 +15,7 @@ the user will be asked to input a filepath until one of proper length is enterta
 end, the script will make sure it is in a .jpg format-- the user will be asked to re-enter the filepath if not. A list of cameras
 for the camera station directory that the filepath exists under will be obtained, represented as Pyton objects.
 For each camera, a set of YAML files for the camera (intrinsics, extrinsics, metadata, and local origin info) will be read
-and stored as dcitionary objects. These dictionaries are stored in lists (one each for intrinsics, extrinsics, and metadata),
+and stored as dictionary objects. These dictionaries are stored in lists (one each for intrinsics, extrinsics, and metadata),
 except for the local origin info.
 
 Depending on the length of the filepath, a 'scope' for the amount imagery to be rectified will be defined. The possible scopes are
@@ -88,7 +88,7 @@ import re
 import sys
 import concurrent.futures
 
-#from coastcam_funcs import *
+from coastcam_funcs import *
 from calibration_crs import *
 from rectifier_crs import *
 
