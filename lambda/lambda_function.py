@@ -30,6 +30,7 @@ import imageio
 import calendar
 import datetime
 from dateutil import tz
+import sys
 
 from coastcam_funcs import *
 from calibration_crs import *
@@ -71,7 +72,23 @@ def check_image(file):
         if file.endswith(image_type):
             isImage = True
     return isImage
-        
+
+def getPathElements(filepath):
+    '''
+    Given a (S3) filepath, return a list of the elements (subfolders, filename) in the filepath
+    Inputs:
+        filepath (string) - S3 filepath
+    Outputs:
+        path_elements (list) - list of elements in the file path        
+    '''
+    path_elements = filepath.split("/")
+
+    #remove empty space elements from the list
+    for elements in path_elements:
+        if len(elements) == 0: 
+            path_elements.remove(elements)
+    return path_elements
+       
 
 def copy_s3_image(source_filepath):
     """
@@ -142,6 +159,7 @@ def copy_s3_image(source_filepath):
     else:
         return 'Not an image. Not copied.'
 
+
 def get_new_key(old_key):
     '''
     Get the new key (filepath) for an image in S3. The old key will have the format
@@ -192,6 +210,57 @@ def get_new_key(old_key):
         
         new_key = "cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" + filename
     return new_key
+
+
+##### CLASSES #####
+class Camera:
+    '''
+    This class represents a camera object for a coastcam stationS
+    '''    
+    def __init__(self, camera_number, filepath):
+        '''
+        Initialization function for Camera class. Set class attribute values
+        Inputs:
+            camera_number (string) - camera number string
+            filepath (string) - S3 filepath for camera folder
+        Outputs:
+            none
+        '''
+        self.camera_number = camera_number
+        self.filepath = filepath
+
+    def onlyTimex(self):
+        '''
+        Remove all image files from the camera file list except for timex images
+        Inputs:
+            none
+        Outputs:
+            none
+        '''
+        keep_list = []
+        #need to first make list of files that will be kept. If you directly removed the unmatched files,
+        #it would not iterate through the whole loop because the list would be shorter
+        for file in self.file_list:
+            if re.match(".+timex*", file):
+                keep_list.append(file)
+        self.file_list = keep_list
+
+    def createDict(self):
+        '''
+        Create dictionary of values for the class. The key value is a unix time. The corresponding data value
+        is the S3 filepath for the image the specified unix time.
+        Inputs:
+            none
+        Outputs:
+            none
+        '''
+        self.unix_list = []
+        self.unix_file_dict = {}
+        for file in self.file_list:
+            filename = getFilename(file)
+            unix_time = unixFromFilename(filename)
+            self.unix_list.append(unix_time)
+            self.unix_file_dict[unix_time] = file
                     
 ###### MAIN ######
 
@@ -199,34 +268,120 @@ print('Loading function')
 
 s3 = boto3.client('s3')
 
-def lambda_handler(event, context):
+def lambda_handler(event='none', context='none'):
     '''
     This function is executed when the Lambda function is triggered on a new image upload.
     '''
-    
+
     #print("Received event: " + json.dumps(event, indent=2))
 
     # Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+
+    print('bucket:', bucket)
     print('unformatted key:',key)
     
     #get reformatted filepath for image
     new_key = get_new_key(key)
-    print('formatted key', new_key)
+    print('formatted key:', new_key, '\n')
+    
     copy_source = {
     'Bucket': bucket,
     'Key': key
     }
+    
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
-        print("CONTENT TYPE: " + response['ContentType'])
+        #print("CONTENT TYPE: " + response['ContentType'])
         waiter = s3.get_waiter('object_exists')
         waiter.wait(Bucket=bucket, Key=key)
         s3.copy(copy_source, bucket, new_key)
-        return response['ContentType']
+        #return response['ContentType']
+        
     except Exception as e:
         print(e)
         print('Error getting object {} from bucket {}. Make sure they exist and your bucket is in the same region as this function.'.format(key, bucket))
         raise e
 
+    key_elements = getPathElements(new_key)
+    station = key_elements[1]
+    
+    ###only want timex images merged###
+    if key_elements[-1].endswith('timex.jpg'):
+        #get list of cameras for station
+        camera_list = []
+        camera_prefix = 'cameras/' + station + '/'
+        folders = s3.list_objects(Bucket=bucket, Prefix=camera_prefix, Delimiter='/')
+        for obj in folders.get('CommonPrefixes'):
+            path = obj['Prefix']
+            path_elements = path.split('/')
+            subfolder = path_elements[2]
+            #camera folder will always be "c*" where * is the camera number (length of 2 characters).
+            #Only want camera folders beside cx
+            if subfolder.startswith('c') and len(subfolder) == 2 and subfolder != 'cx':
+                camera_list.append(subfolder)
+    
+        yaml_lists = []
+        cameras = []
+        #start iterator at 1 because cameras start at c1
+        i = 1
+        for cam in camera_list:
+          camera_filepath = camera_prefix + cam
+          cameras.append(Camera(cam.upper(), camera_filepath))
+          
+          file_names = [station.upper()+"_"+cam.upper()+"_extr", 
+                        station.upper()+"_"+cam.upper()+"_intr",
+                        station.upper()+"_"+cam.upper()+"_metadata",
+                        station.upper()+"_localOrigin"]
+          yaml_lists.append(file_names)
+    
+        extrinsic_cal_files = []
+        intrinsic_cal_files = []
+        metadata_files = []
+        for file_list in yaml_lists:
+            extrinsic_cal_files.append(file_list[0] + '.yaml')
+            intrinsic_cal_files.append(file_list[1] + '.yaml')
+            metadata_files.append(file_list[2] + '.yaml')
+    
+        #YAML files are located in S3
+        #store YAML files in Lambda function /tmp directory while function executes
+        i = 0
+        for file in extrinsic_cal_files:
+            file_path = 'cameras/parameters/' + station + '/' + file
+            #!!! in AWS Lambda console use '/tmp/, but when working locally use './tmp/'
+            download_path = '/tmp/' + file
+            extrinsic_cal_files[i] = download_path
+            with open(download_path, 'wb') as yaml_file:
+                s3.download_fileobj(bucket, file_path, yaml_file)
+            i = i + 1
+        
+        i = 0
+        for file in intrinsic_cal_files:
+            file_path = 'cameras/parameters/' + station + '/' + file
+            download_path = '/tmp/' + file
+            intrinsic_cal_files[i] = download_path
+            with open(download_path, 'wb') as yaml_file:
+                s3.download_fileobj(bucket, file_path, yaml_file)
+            i = i + 1
+                
+        i = 0       
+        for file in metadata_files:
+            file_path = 'cameras/parameters/' + station + '/' + file
+            download_path = '/tmp/' + file
+            metadata_files[i] = download_path
+            with open(download_path, 'wb') as yaml_file:
+                s3.download_fileobj(bucket, file_path, yaml_file)
+            i = i + 1
+        
+        #only 1 local origin file, don't need to do loop
+        file_path = 'cameras/parameters/' + station + '/' + file_names[3] + '.yaml'
+        download_path = '/tmp/' + file_names[3] + '.yaml'
+        with open(download_path, 'wb') as yaml_file:
+            s3.download_fileobj(bucket, file_path, yaml_file)
+            
+        print(os.listdir('/tmp/'))
+    
+    ###images that are not timex will only be copied
+    else:
+        print(f'{new_key} copied')
