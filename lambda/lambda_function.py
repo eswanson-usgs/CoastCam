@@ -1,23 +1,11 @@
 """
-Eric Swanson
-The purpose of this script is to convert the S3 filepath for one image in the
-USGS CoastCam bucket. This usees a test S3 bucket and not the public-facing cmgp-CoastCam bucket.
-The old filepath is in the format s3:/cmgp-coastcam/cameras/[station]/products/[long filename].
-The new filepath is in the format s3:/cmgp-coastcam/cameras/[station]/[camera]/[year]/[day]/raw/[longfilename].
-day is the format ddd_mmm.nn. ddd is 3-digit number describing day in the year.
-mmm is 3 letter abbreviation of month. nn is 2 digit number of day of month.
-filenames are in the format [unix datetime].[camera in format c#].[file format].[image format]
-This script splits up the filepath of the old path to be used in the new path. The elements used in the
-new path are the [station] and [long filename]. Then it plits up the filename to get elements used in the new path.
-[unix datetime] is used to get [year], [day], and [camera]. unix2datetime() converts the unix time in the filename
-to a human-readable datetime object and string. Once the new filepath is created, the S3 buckets are accessed using
-fsspec and the image is copied from one path to another use the fsspec copy() method.
-This is done using the function copy_s3_image().
-For this test script, the source filepath is
-s3://test-cmgp-bucket/cameras/caco-01/products/1576260000.c2.snap.jpg
-The destination filepath is
-s3://test-cmgp-bucket/cameras/caco-01/c2/2019/347_Dec.13/raw/1576260000.c2.snap.jpg
-The filename is 1576260000.c2.snap.jpg
+Author: Eric Swanson - eswanson@contractor.usgs.gov
+Lambda functions is triggered by image uploaded to an S3 coastcam bucket at with the prefix ('directory') cameras/[station]/products/. Lambda function will not trigger 
+if an image is uploaded to a different prefix in the S3 bucket. This image will be copied to the same S3 bucket at the prefix cameras/[station]/[camera]/[year]/[day]]/raw/ .
+The day is formatted as [day of year]_mmm.[day of the month].
+The year, day, and camera are derived from the filename. This function assumes the file has the format [unix time].[camera].timex.jpg -- currently this function will only 
+merge timex images. Once these images are copied, a rectified (merge) image is created. This function will use imagery from all cameras at the same station that have a timex
+image at the same unix time. This merege image is uploaded to the bucket at the prefix cameras/[station]/cx/merge/[year]/[day]/[unix time].timerx.merge.jpg.
 """
 
 ##### REQUIRED PACKAGES #####
@@ -55,6 +43,19 @@ def unix2datetime(unixnumber):
     date_time_obj =  datetime.datetime.fromtimestamp(time_stamp, tz=datetime.timezone.utc)
     date_time_str = date_time_obj.strftime('%Y-%m-%d %H:%M:%S')
     return date_time_str, date_time_obj
+    
+def unixFromFilename(filename):
+    '''
+    Given a filename in the format [unix time].[camera number].[image type].jpg, return image unix time
+    Input:
+        filename (string) - name of the file in the format statewd above
+    Output:
+        filename_elements[0] (string) - first elements of the split up filename. This is the unix time string.
+    '''
+
+    filename_elements = filename.split(".")
+    #unix time is first element of the filename
+    return filename_elements[0]
 
 def check_image(file):
     """
@@ -261,12 +262,14 @@ class Camera:
             unix_time = unixFromFilename(filename)
             self.unix_list.append(unix_time)
             self.unix_file_dict[unix_time] = file
+
+
                     
 ###### MAIN ######
-
 print('Loading function')
 
 s3 = boto3.client('s3')
+s3_resource = boto3.resource('s3')
 
 def lambda_handler(event='none', context='none'):
     '''
@@ -291,13 +294,14 @@ def lambda_handler(event='none', context='none'):
     'Key': key
     }
     
+    bucket_resource = s3_resource.Bucket(bucket)
+    
     try:
         response = s3.get_object(Bucket=bucket, Key=key)
-        #print("CONTENT TYPE: " + response['ContentType'])
         waiter = s3.get_waiter('object_exists')
         waiter.wait(Bucket=bucket, Key=key)
         s3.copy(copy_source, bucket, new_key)
-        #return response['ContentType']
+        print(f'{new_key} copied')
         
     except Exception as e:
         print(e)
@@ -379,9 +383,91 @@ def lambda_handler(event='none', context='none'):
         download_path = '/tmp/' + file_names[3] + '.yaml'
         with open(download_path, 'wb') as yaml_file:
             s3.download_fileobj(bucket, file_path, yaml_file)
-            
-        print(os.listdir('/tmp/'))
+        
+        #create YAML dictionaries
+        local_origin = yaml2dict(download_path)
+        metadata_list = []
+        intrinsics_list = []
+        extrinsics_list = []
+        for file in metadata_files:
+            metadata_list.append(yaml2dict(file))
+        extrinsics_list = []
+        for file in extrinsic_cal_files:
+            extrinsics_list.append( yaml2dict(file) )
+        intrinsics_list = []
+        for file in intrinsic_cal_files:
+            intrinsics_list.append( yaml2dict(file) )
+        
+        calibration = CameraCalibration(metadata_list[0],intrinsics_list[0],extrinsics_list[0],local_origin)
+
+        xmin = 0.
+        xmax = 500.
+        ymin = 0.
+        ymax = 700.
+        dx = 1.
+        dy = 1.
+        z =  0.
+        
+        rectifier_grid = TargetGrid(
+            [xmin, xmax],
+            [ymin, ymax],
+            dx,
+            dy,
+            z
+        )
+        
+        rectifier = Rectifier(rectifier_grid)
+        
+        year = key_elements[3]
+        day = key_elements[4]
+        unix_time = unixFromFilename(key_elements[-1]) 
+        
+        #keep track of which cameras have imagery for the given unix time
+        image_files_list = []
+        time_cam_list = []
+        for camera in cameras:
+            image_filepath = camera.filepath + '/' + year + '/' + day + '/raw/' + unix_time + '.' + camera.camera_number.lower() + '.timex.jpg'
+            try:
+                #if exists, download image to tmp folder
+                s3.head_object(Bucket=bucket, Key=image_filepath)
+                
+                download_path = '/tmp/' + unix_time + '.' + camera.camera_number.lower() + '.timex.jpg'
+                with open(download_path, 'wb') as img_file:
+                    s3.download_fileobj(bucket, image_filepath, img_file)
+                    
+                image_files_list.append(download_path)
+                time_cam_list.append(camera.camera_number)
+            except:
+                print(f'{camera.camera_number} does not have an image at time {unix_time}')
+        
+        #rectify imagery        
+        if len(time_cam_list) != len(cameras):
+            temp_intrinsics = []
+            temp_extrinsics = []
     
+            c = 0
+            for camera in cameras:
+                if camera.camera_number not in time_cam_list:
+                    c = c + 1
+                else:
+                    temp_intrinsics.append(intrinsics_list[c])
+                    temp_extrinsics.append(extrinsics_list[c])
+                    c = c + 1
+                    
+            rectified_image = rectifier.rectify_images(metadata_list[0], image_files_list, temp_intrinsics, temp_extrinsics, local_origin)      
+        else:
+            rectified_image = rectifier.rectify_images(metadata_list[0], image_files_list, intrinsics_list, extrinsics_list, local_origin)
+        
+        ofile = '/tmp/' + unix_time + '.timex.merge.jpg'
+        imageio.imwrite(ofile,np.flip(rectified_image,0),format='jpg')
+        
+        upload_key = 'cameras/' + station + '/cx/merge/' + year + '/' + day + '/' + unix_time + '.timex.merge.jpg'
+        with open(ofile, 'rb') as merged_img:
+            s3.upload_fileobj(merged_img, bucket, upload_key)
+            
+        print(f'{upload_key} uploaded to S3')
+
+        
     ###images that are not timex will only be copied
     else:
         print(f'{new_key} copied')
