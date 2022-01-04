@@ -1,0 +1,5 @@
+
+*.pyc
+*.pyc
+coastcamdb/__pycache__/coastcam_funcs.cpython-39.pyc
+inventory tool/.ipynb_checkpoints/inventory_tool-checkpoint.ipynb

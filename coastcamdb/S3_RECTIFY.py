@@ -3,12 +3,10 @@ Eric Swanson
 Purpose:  Rectify the images using code from Chris Sherwood as a basis. Once rectified, transfer images to new folder in S3.
 This script is designed to work on a 'scope' specfiied by the user. The user inputs a filepath and the script will determine
 whether to rectify imagery for a single unix time, day, year, or entire station in S3.
-
 Description: 
 This script is run through the command prompt. The user enters an S3 filepath as a command line argument. An example way to run this
 script on Windows command prompt is:
 py S3_RECTIFY.py s3://test-cmgp-bucket/cameras/caco-01/
-
 The filepath is obatined from the command line as a variable and split up into elements consisting of the filepath subfolders
 or image filename. Using these elements, the filepath is checked to see if it's a proper length. If it it's too long or too short,
 the user will be asked to input a filepath until one of proper length is entertained. If the filepath contains a filename at the
@@ -17,19 +15,16 @@ for the camera station directory that the filepath exists under will be obtained
 For each camera, a set of YAML files for the camera (intrinsics, extrinsics, metadata, and local origin info) will be read
 and stored as dictionary objects. These dictionaries are stored in lists (one each for intrinsics, extrinsics, and metadata),
 except for the local origin info.
-
 Depending on the length of the filepath, a 'scope' for the amount imagery to be rectified will be defined. The possible scopes are
 unix time, day, year, and station. Basically, the longer the filepath, the smaller the scope and the less amount imagery that
 will be rectified. For the scope to be 'unix time', the user must input a filepath that ends with a filename. This is because the
 unix time is contained in the filename.
-
 If the scope is for a single unix time: the station, year, and day are obtained from the filepath. For each camera, the given day
 is searched for the given unix time. The script keeps track of which cameras have imagery for that time. Only timex images
 are used. If the number of cameras with imagery for that time is less than the total number of cameras for that station,
 only the intrinsics and extrinsics for the cameras that have imagery will be used. Otherwise, every extrinsic and intrisinsic
 dictionary is used. Using the extrinsics, instrinsics, metadata, and local origin info, a 'merged' image is created. This image
 is copied to the appropriate 'merge' directory in S3.
-
 If the scope is for a day: for each camera, an S3 filepath for a list of all the "raw" images for the camera's corresponding S3 filepath is obtained. A dictionary. has_time_dict,
 is created to keep track of which cameras have imagery for each unix time. They key values are unix times and the data values
 are lists of camera numbers. Each list of imagery is stripped of all images except
@@ -46,21 +41,17 @@ If there is a unix time that does not have a image from each camera, then a rect
 that do exist for the that unix time. Each rectified image is added to a list of rectified images, and each unix timen that has
 at least one image file is also stored in a list (as a string). Each rectified image is copied to a new S3 filepath.
 Finally, this image is written to a new "rectified" filepath in S3. This is done through the mergeDay() function.
-
 If the scope is for a year: each camera at the station is checked to see if contains imagery for that year. If not, a flag is set
 to denote that the camera has no imagery. A global list of day directories in the year directory is obtained. For each day,
 a list of cameras is created. Only cameras that have imagery (in S3) for that day are added to the list. Using this list,
 rectification is performed on all the images for that day using the mergeDay() function. Multithreading parallelization is used
 to speed up the rectification and copying process.
-
 If the scope is for the entire station: a list of years in the station directory is created. For every year in this list, imagery
 is rectified following the steps listed above for the scope for a year.
-
 The old filepath for unrectified images is in the format :
 s3://[S3 bucket]/cameras/[station]/[camera]/[year]/[day]/raw/[image file name]
 The new filepath for rectified images is:
 s3://[S3 bucket]/cameras/[station]/merge/[year]/[day]/[image filename]
-
 required files:
 coastcam_funcs.py
 calibration_crs.py
