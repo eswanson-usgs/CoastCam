@@ -1,0 +1,12 @@
+x: 410843.97
+y: 4655942.49
+z: 27.3
+a: -0.271
+t: 1.304
+r: 0.007
+#x - x location of camera
+#y - y location of camera
+#z - z location of camera
+#a - camera azimuth orientation
+#t - camera tilt orientation
+#r - camera roll orientation

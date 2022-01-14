@@ -1,0 +1,10 @@
+name: CACO-01
+serial_number: 1
+camera_number: C1
+calibration_date: 2019-12-12
+coordinate_system: geo
+#name - name of the camera station
+#serial_number - camera serial number
+#camera_number - camera number for the corresponding station
+#calibration_date - date when the camera was calibrated
+#coordinate_system - coordinate system for extrinsic parameters. Either "geo" or "xyz"
