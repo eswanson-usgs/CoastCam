@@ -46,6 +46,7 @@ dbname = csv_parameters[2]
 user = csv_parameters[3]
 password = csv_parameters[4]
 
+connection = pymysql.connect(host=host, user=user, port=port, passwd=password, db=dbname)
 
 #test
 result = pd.read_sql('select * from camera', con=connection)
