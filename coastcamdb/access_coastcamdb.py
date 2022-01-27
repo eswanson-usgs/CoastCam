@@ -36,23 +36,16 @@ def parseCSV(filepath):
 
 ##### MAIN #####
 
-###TEST TEST####
-##filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
-##csv_parameters = parseCSV(filepath)
-##
-##host = csv_parameters[0]
-##port = int(csv_parameters[1])
-##dbname = csv_parameters[2]
-##user = csv_parameters[3]
-##password = csv_parameters[4]
 
-host = 'localhost'
-port = 3306
-dbname = 'argus'
-user = 'root'
-password = 'Sw@nsonge1021'
-connection = pymysql.connect(host=host, user=user, port=port, passwd=password, db=dbname)
-print(type(connection))
+filepath = "C:/Users/eswanson/OneDrive - DOI/Documents/Python/db_access.csv"
+csv_parameters = parseCSV(filepath)
+
+host = csv_parameters[0]
+port = int(csv_parameters[1])
+dbname = csv_parameters[2]
+user = csv_parameters[3]
+password = csv_parameters[4]
+
 
 #test
 result = pd.read_sql('select * from camera', con=connection)
