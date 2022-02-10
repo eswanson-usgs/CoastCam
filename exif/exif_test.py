@@ -2,8 +2,23 @@
 #test script to test adding exif tags
 
 import exif
+import yaml
 from datetime import datetime
-from coastcam_funcs import *
+
+def yaml2dict(yamlfile):
+    """ Import contents of a YAML file as a dict
+    Args:
+        yamlfile (str): YAML file to read
+    Returns:
+        dict interpreted from YAML file
+    """
+    dictname = None
+    with open(yamlfile, "r") as infile:
+        try:
+            dictname = yaml.safe_load(infile)
+        except yaml.YAMLerror as exc:
+            print(exc)
+    return dictname
 
 image = exif.Image('1581508801.c1.timex.jpg')
 
