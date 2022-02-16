@@ -61,7 +61,7 @@ for dictionary in yaml_list:
 exif_dict = {'Exif.Photo.UserComment': str(data_fields), 
              'Exif.Image.Copyright': 'USGS',
              'Exif.Image.ImageDescription': 'This is a CoastCam picture',
-             'Exif.Image.DateTimeOriginal': '02-12-2020 12:00:01',
+             'Exif.Image.DateTimeOriginal': '02-12-2020 12:00:01', #this is 'ModifyDate' when using exiftool
              'Exif.Image.DateTime': '02-16-2022 10:26:00',
              'Exif.Image.Artist': 'SPCMSC CCH Group',
              'Exif.Image.Make': 'camera make',
