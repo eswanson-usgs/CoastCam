@@ -22,15 +22,15 @@ def yaml2dict(yamlfile):
             print(exc)
     return dictname
 
-def readYAMLcomments(yamlfile, comment_dict):
+def readYAMLcomments(yamlfile):
     """
     Read a YAML file and add its comments to a dict
     Args:
         yamlfile (str): YAML file to read
-        comment_dict (dict): dict of YAML comments that will be added to
     Returns:
         comment_dict (dict): dict of YAML comments
     """
+    comment_dict = {}
     with open(yamlfile, "r") as infile:
         lines = infile.readlines()
         for line in lines:
@@ -45,30 +45,28 @@ def readYAMLcomments(yamlfile, comment_dict):
 ##### MAIN #####
 img = pyexiv2.Image('1581508801.c1.timex.jpg')
 
+#top level dict for exif UserComment tag
+UserComment= {}
+UserComment['Note'] = 'This comment provides camera location and direction (extrinsic calibration) and lens coefficients (intrinsic calibration'
+
 #calibration paramters
 extrinsics = yaml2dict('CACO-01_C1_extr.yaml')
-instrinsics = yaml2dict('CACO-01_C1_intr.yaml')
+intrinsics = yaml2dict('CACO-01_C1_intr.yaml')
 metadata = yaml2dict('CACO-01_C1_metadata.yaml')
-local_origin = yaml2dict('CACO-01_localOrigin.yaml')
 
-#adds all parameters from YAML files into one dictionary
-data_fields = {}
-yaml_list = []
-yaml_list.append(extrinsics)
-yaml_list.append(instrinsics)
-yaml_list.append(metadata)
-yaml_list.append(local_origin)
-for dictionary in yaml_list:
-    for key in dictionary:
-        data_fields[key] = str(dictionary[key])
 
 #Read comments from YAML file
-comment_dict = {}
-readYAMLcomments('CACO-01_C1_extr.yaml', comment_dict)
-readYAMLcomments('CACO-01_C1_intr.yaml', comment_dict)
-readYAMLcomments('CACO-01_C1_metadata.yaml', comment_dict)
-readYAMLcomments('CACO-01_localOrigin.yaml', comment_dict)
-data_fields['comments'] = comment_dict
+extr_comments = readYAMLcomments('CACO-01_C1_extr.yaml')
+extrinsics['variable descriptions'] = extr_comments
+intr_comments = readYAMLcomments('CACO-01_C1_intr.yaml')
+intrinsics['variable descriptions'] = intr_comments
+metadata_comments = readYAMLcomments('CACO-01_C1_metadata.yaml')
+metadata['variable descriptions'] = metadata_comments
+
+UserComment['Extrinsics'] = extrinsics
+UserComment['Intrinsics'] = intrinsics
+UserComment['Metadata'] = metadata
+print(UserComment)
 
 #                   ######exif, iptc, and xmp tags are only placeholders######
 
@@ -76,7 +74,7 @@ data_fields['comments'] = comment_dict
 #required exif (if available): ImageDescription, DateTimeOriginal, ModifyDate, GPSDateStamp, GPSTimeStamp
 #recommended exif: Artist, Make, Model
 #exif GPS fields: GPSAreaInformation, GPSMapDatum, GPSLatitude, GPSLatitudeRef, GPSLongitude, GPSLongitudeRef
-exif_dict = {'Exif.Photo.UserComment': str(data_fields), 
+exif_dict = {'Exif.Photo.UserComment': str(UserComment), 
              'Exif.Image.Copyright': 'USGS',
              'Exif.Image.ImageDescription': 'This is a CoastCam picture',
              'Exif.Image.DateTimeOriginal': '02-12-2020 12:00:01', #this is 'ModifyDate' when using exiftool
@@ -88,9 +86,9 @@ exif_dict = {'Exif.Photo.UserComment': str(data_fields),
              'Exif.GPSInfo.GPSMapDatum': 'EPSG:4326 (WGS 84)',
              'Exif.GPSInfo.GPSDateStamp': '2020:02:12',
              'Exif.GPSInfo.GPSTimeStamp': '12:00:01',
-             'Exif.GPSInfo.GPSLatitude':  data_fields['x'],
+             'Exif.GPSInfo.GPSLatitude':  extrinsics['x'],
              'Exif.GPSInfo.GPSLatitudeRef': 'N',
-             'Exif.GPSInfo.GPSLongitude':  data_fields['y'],
+             'Exif.GPSInfo.GPSLongitude':  extrinsics['y'],
              'Exif.GPSInfo.GPSLongitudeRef': 'N'}             
 img.modify_exif(exif_dict)
 
@@ -111,7 +109,7 @@ xmp_dict = {'Xmp.xmp.UsageTerms': 'These data are preliminary or provisional and
             'Xmp.xmp.Contributor': 'Eric Swanson',
             'Xmp.xmp.PreservedFilename': '1581508801.c1.timex.jpg'}
 img.modify_xmp(xmp_dict)
-print(img.read_exif())
+
 img.close()
 
 
