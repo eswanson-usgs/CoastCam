@@ -12,7 +12,7 @@ def yaml2dict(yamlfile):
     Args:
         yamlfile (str): YAML file to read
     Returns:
-        dict interpreted from YAML file
+        dictname (dict): dict interpreted from YAML file
     """
     dictname = None
     with open(yamlfile, "r") as infile:
@@ -22,15 +22,27 @@ def yaml2dict(yamlfile):
             print(exc)
     return dictname
 
+def readYAMLcomments(yamlfile, comment_dict):
+    """
+    Read a YAML file and add its comments to a dict
+    Args:
+        yamlfile (str): YAML file to read
+        comment_dict (dict): dict of YAML comments that will be added to
+    Returns:
+        comment_dict (dict): dict of YAML comments
+    """
+    with open(yamlfile, "r") as infile:
+        lines = infile.readlines()
+        for line in lines:
+            if line.startswith('#'):
+                #clean up comment line and add to dictionary
+                line = line.replace('#', '')
+                line = line.strip()
+                comment_dict[line.split()[0] + '_comment'] = '#' + line
+    return comment_dict
+
 
 ##### MAIN #####
-##img = pyexiv2.Image('1581508801.c1.timex.jpg')
-##data = img.read_exif()
-##print(data)
-##img.close()
-##image = exif.Image('1581508801.c1.timex.jpg')
-
-
 img = pyexiv2.Image('1581508801.c1.timex.jpg')
 
 #calibration paramters
@@ -48,9 +60,15 @@ yaml_list.append(metadata)
 yaml_list.append(local_origin)
 for dictionary in yaml_list:
     for key in dictionary:
-        data_fields[key] = dictionary[key]
+        data_fields[key] = str(dictionary[key])
 
-
+#Read comments from YAML file
+comment_dict = {}
+readYAMLcomments('CACO-01_C1_extr.yaml', comment_dict)
+readYAMLcomments('CACO-01_C1_intr.yaml', comment_dict)
+readYAMLcomments('CACO-01_C1_metadata.yaml', comment_dict)
+readYAMLcomments('CACO-01_localOrigin.yaml', comment_dict)
+data_fields['comments'] = comment_dict
 
 #                   ######exif, iptc, and xmp tags are only placeholders######
 
@@ -93,7 +111,7 @@ xmp_dict = {'Xmp.xmp.UsageTerms': 'These data are preliminary or provisional and
             'Xmp.xmp.Contributor': 'Eric Swanson',
             'Xmp.xmp.PreservedFilename': '1581508801.c1.timex.jpg'}
 img.modify_xmp(xmp_dict)
-
+print(img.read_exif())
 img.close()
 
 
