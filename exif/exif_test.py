@@ -5,6 +5,7 @@
 ##### IMPORTS #####
 import pyexiv2
 import yaml
+import ast
 
 ##### FUNCTIONS #####
 def yaml2dict(yamlfile):
@@ -66,7 +67,10 @@ metadata['variable descriptions'] = metadata_comments
 UserComment['Extrinsics'] = extrinsics
 UserComment['Intrinsics'] = intrinsics
 UserComment['Metadata'] = metadata
-print(UserComment)
+use_string = str(UserComment)
+test = use_string.split('{')
+print(test)
+
 
 #                   ######exif, iptc, and xmp tags are only placeholders######
 
