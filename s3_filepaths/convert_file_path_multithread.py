@@ -119,9 +119,14 @@ def copy_s3_image(source_filepath):
             #can use built-in calendar attribute month_name[month] to get month name from a number. Month cannot have leading zeros
             month_word = calendar.month_name[int(month)]
             #month in the mmm word form
-            month_formatted = month_word[0:3] 
+            month_formatted = month_word[0:3]
 
-            new_format_day = day_of_year + "_" + month_formatted + "." + day
+            if int(day_of_year) < 10 and (len(day_of_year) == 1):
+                new_format_day = "00" + day_of_year + "_" + month_formatted + "." + day
+            elif (int(day_of_year) >= 10) and (int(day_of_year) < 100) and (len(day_of_year) == 2):
+                new_format_day = "0" + day_of_year + "_" + month_formatted + "." + day
+            else:
+                new_format_day = day_of_year + "_" + month_formatted + "." + day
             
             new_filepath = "s3:/" + "/" + bucket + "/cameras/" + station + "/" + image_camera + "/" + year + "/" + new_format_day + "/raw/" #file not included
             destination_filepath = new_filepath + filename
