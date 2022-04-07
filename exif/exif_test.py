@@ -48,29 +48,43 @@ img = pyexiv2.Image('1581508801.c1.timex.jpg')
 
 #top level dict for exif UserComment tag
 UserComment= {}
-UserComment['Note'] = 'This comment provides camera location and direction (extrinsic calibration) and lens coefficients (intrinsic calibration'
+UserComment['Note'] = ('This comment provides 2 nested dictionaries: one for calibration data fields, one for descriptions of those fields')
 
 #calibration paramters
 extrinsics = yaml2dict('CACO-01_C1_extr.yaml')
 intrinsics = yaml2dict('CACO-01_C1_intr.yaml')
 metadata = yaml2dict('CACO-01_C1_metadata.yaml')
+local_origin = yaml2dict('CACO-01_localOrigin.yaml')
 
+#read data fields into one dictionary
+data_fields = {}
+yaml_list = []
+yaml_list.append(extrinsics)
+yaml_list.append(intrinsics)
+yaml_list.append(metadata)
+yaml_list.append(local_origin)
+for dictionary in yaml_list:
+    for key in dictionary:
+        data_fields[key] = str(dictionary[key])
 
-#Read comments from YAML file
+#Read comments from YAML file into one dictionary
+comment_fields = {}
+comment_list = []
 extr_comments = readYAMLcomments('CACO-01_C1_extr.yaml')
-extrinsics['variable descriptions'] = extr_comments
 intr_comments = readYAMLcomments('CACO-01_C1_intr.yaml')
-intrinsics['variable descriptions'] = intr_comments
 metadata_comments = readYAMLcomments('CACO-01_C1_metadata.yaml')
-metadata['variable descriptions'] = metadata_comments
+localOrg_comments = readYAMLcomments('CACO-01_localOrigin.yaml')
+comment_list.append(extr_comments)
+comment_list.append(intr_comments)
+comment_list.append(metadata_comments)
+comment_list.append(localOrg_comments)
+for dictionary in comment_list:
+    for key in dictionary:
+        comment_fields[key] = str(dictionary[key])
 
-UserComment['Extrinsics'] = extrinsics
-UserComment['Intrinsics'] = intrinsics
-UserComment['Metadata'] = metadata
-use_string = str(UserComment)
-test = use_string.split('{')
-print(test)
-
+UserComment['data'] = str(data_fields)
+descrip_comment = str(comment_fields)
+UserComment['descriptions'] = str(comment_fields)
 
 #                   ######exif, iptc, and xmp tags are only placeholders######
 

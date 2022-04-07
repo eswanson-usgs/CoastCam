@@ -40,7 +40,7 @@ def copy_image(args):
 ##### MAIN #####
 print("start:", datetime.datetime.now())
 #source folder filepath with format s3:/cmgp-coastcam/cameras/[station]/products/[filename]
-source_folder = "s3://cmgp-coastcam/cameras/dreaminn/" 
+source_folder = "s3://cmgp-coastcam/cameras/sunset/" 
 
 #station caco-01 for testing
 file_system = fsspec.filesystem('s3', profile='coastcam')
